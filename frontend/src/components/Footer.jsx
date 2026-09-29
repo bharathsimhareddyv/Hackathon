@@ -22,7 +22,6 @@ export default function Footer() {
           <Link to="/terms" className="hover:text-cyan-400 transition-colors">Terms & Conditions</Link>
           <Link to="/leaderboard" className="hover:text-cyan-400 transition-colors">Leaderboard</Link>
           <Link to="/team-login" className="hover:text-emerald-300 transition-colors">Team Login</Link>
-          <Link to="/admin-login" className="hover:text-cyan-400 transition-colors">Admin Portal</Link>
         </div>
 
         <div className="text-xs text-slate-400">

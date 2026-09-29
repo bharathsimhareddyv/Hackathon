@@ -242,7 +242,8 @@ router.post('/admin-password-change/request-code', protect, async (req, res) => 
   try {
     if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Admin access required' });
     const admin = await Admin.findById(req.user._id);
-    const targetEmail = (process.env.ADMIN_PASSWORD_OTP_EMAIL || admin.email).trim().toLowerCase();
+    if (!admin?.email) return res.status(400).json({ message: 'Your admin account needs an email address before changing its password' });
+    const targetEmail = admin.email.trim().toLowerCase();
     const code = crypto.randomInt(100000, 1000000).toString();
     await OtpToken.deleteMany({ email: targetEmail, purpose: 'ADMIN_PASSWORD_CHANGE' });
     await OtpToken.create({
@@ -277,7 +278,8 @@ router.post('/admin-password-change/verify-code', protect, async (req, res) => {
     }
 
     const admin = await Admin.findById(req.user._id);
-    const targetEmail = (process.env.ADMIN_PASSWORD_OTP_EMAIL || admin.email).trim().toLowerCase();
+    if (!admin?.email) return res.status(400).json({ message: 'Your admin account needs an email address before changing its password' });
+    const targetEmail = admin.email.trim().toLowerCase();
     const otp = await OtpToken.findOne({ email: targetEmail, purpose: 'ADMIN_PASSWORD_CHANGE' }).sort({ createdAt: -1 });
     if (!otp || otp.expiresAt < new Date() || !(await bcrypt.compare(code, otp.codeHash))) {
       return res.status(400).json({ message: 'Verification code is invalid or expired' });

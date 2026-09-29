@@ -41,7 +41,7 @@ export default function AdminLayout() {
     { path: '/admin/team-accounts', label: 'Team Accounts', icon: Users },
     { path: '/admin/accounts', label: 'Admin Accounts', icon: ShieldCheck },
     { path: '/admin/rounds', label: 'Rounds & Timings', icon: Clock },
-    { path: '/admin/teams', label: 'Round Teams', icon: UserCheck },
+    { path: '/admin/teams', label: 'Team Assignments', icon: UserCheck },
     { path: '/admin/projects', label: 'Project Manager', icon: FolderGit2 },
     { path: '/admin/evaluations', label: 'Evaluations & Marks', icon: Award },
     { path: '/admin/submissions', label: 'Submissions', icon: UploadCloud },

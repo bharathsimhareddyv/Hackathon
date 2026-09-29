@@ -3,6 +3,8 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const RoundTeam = require('../models/RoundTeam');
 const TeamAccount = require('../models/TeamAccount');
+const Participant = require('../models/Participant');
+const Round = require('../models/Round');
 const ActivityLog = require('../models/ActivityLog');
 const { protect, adminOnly, teamOnly } = require('../middleware/authMiddleware');
 const { generateRandomPassword } = require('../utils/passwordGenerator');
@@ -40,6 +42,22 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Fetch Team Accounts Error:', error);
     res.status(500).json({ message: 'Failed to fetch team accounts' });
+  }
+});
+
+router.get('/round/:roundNumber', async (req, res) => {
+  try {
+    const roundNumber = parseInt(req.params.roundNumber, 10);
+    if (!Number.isInteger(roundNumber) || roundNumber < 1) {
+      return res.status(400).json({ message: 'A valid round number is required' });
+    }
+    const teams = await RoundTeam.find({ roundNumber, teamAccountId: { $ne: null } })
+      .populate('teamAccountId', 'loginId status memberNames')
+      .populate('projectId')
+      .sort({ teamCode: 1 });
+    res.json(teams);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch round team accounts' });
   }
 });
 
@@ -160,6 +178,75 @@ router.post('/bulk-generate', async (req, res) => {
   } catch (error) {
     console.error('Bulk Generate Teams Error:', error);
     res.status(500).json({ message: 'Failed to bulk generate teams' });
+  }
+});
+
+router.post('/:id/assign-participants', async (req, res) => {
+  try {
+    const { roundNumber, participantIds, memberLimit, projectId } = req.body;
+    const roundNum = parseInt(roundNumber, 10);
+    const capacity = parseInt(memberLimit, 10);
+    const cleanIds = [...new Set((Array.isArray(participantIds) ? participantIds : [])
+      .map(id => String(id).trim().toUpperCase()).filter(Boolean))];
+
+    if (!Number.isInteger(roundNum) || roundNum < 1 || cleanIds.length === 0) {
+      return res.status(400).json({ message: 'Choose a round and at least one Arohan ID' });
+    }
+    if (!Number.isInteger(capacity) || capacity < 1 || capacity > 20 || cleanIds.length > capacity) {
+      return res.status(400).json({ message: 'Selected students must fit within the team size (1-20)' });
+    }
+
+    const account = await TeamAccount.findById(req.params.id);
+    if (!account) return res.status(404).json({ message: 'Team account not found' });
+    if (account.status !== 'ACTIVE') return res.status(400).json({ message: 'Only active team accounts can receive participants' });
+    if (!await Round.exists({ roundNumber: roundNum })) {
+      return res.status(404).json({ message: `Round ${roundNum} does not exist` });
+    }
+
+    const participants = await Participant.find({ arohanId: { $in: cleanIds }, active: true }).select('arohanId name');
+    if (participants.length !== cleanIds.length) {
+      const found = new Set(participants.map(participant => participant.arohanId));
+      const missing = cleanIds.filter(id => !found.has(id));
+      return res.status(400).json({ message: `Unknown or inactive Arohan IDs: ${missing.join(', ')}` });
+    }
+
+    let roundTeam = await RoundTeam.findOne({ roundNumber: roundNum, teamAccountId: account._id });
+    const conflictsFilter = {
+      roundNumber: roundNum,
+      participantIds: { $in: cleanIds },
+      ...(roundTeam ? { _id: { $ne: roundTeam._id } } : {})
+    };
+    const conflicts = await RoundTeam.find(conflictsFilter).select('teamCode participantIds');
+    if (conflicts.length) {
+      const conflictingTeams = conflicts.map(team => team.teamCode).join(', ');
+      return res.status(409).json({ message: `One or more students are already assigned in Round ${roundNum} (${conflictingTeams})` });
+    }
+
+    if (!roundTeam) {
+      roundTeam = new RoundTeam({ roundNumber: roundNum, teamCode: account.loginId, teamAccountId: account._id });
+    }
+    roundTeam.participantIds = cleanIds;
+    roundTeam.memberLimit = capacity;
+    roundTeam.memberNames = participants.map(participant => participant.name || participant.arohanId);
+    if (projectId !== undefined) roundTeam.projectId = projectId || null;
+    await roundTeam.save();
+
+    account.memberNames = roundTeam.memberNames;
+    await account.save();
+
+    await ActivityLog.create({
+      actor: req.user.username || 'Admin',
+      action: 'TEAM_PARTICIPANTS_ASSIGNED',
+      roundNumber: roundNum,
+      teamId: account.loginId,
+      details: `Assigned ${cleanIds.length}/${capacity} students: ${cleanIds.join(', ')}`
+    });
+
+    await roundTeam.populate(['teamAccountId', 'projectId']);
+    res.json({ message: `Assigned ${cleanIds.length} student(s) to ${account.loginId}`, team: roundTeam });
+  } catch (error) {
+    console.error('Assign Team Participants Error:', error);
+    res.status(500).json({ message: 'Failed to assign students to team' });
   }
 });
 

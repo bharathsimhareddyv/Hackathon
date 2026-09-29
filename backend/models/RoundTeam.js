@@ -6,6 +6,7 @@ const RoundTeamSchema = new mongoose.Schema({
   teamAccountId: { type: mongoose.Schema.Types.ObjectId, ref: 'TeamAccount', default: null },
   memberNames: [{ type: String, trim: true }],
   participantIds: [{ type: String, uppercase: true, trim: true }],
+  memberLimit: { type: Number, min: 1, max: 20, default: 4 },
   projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', default: null },
   notes: { type: String, default: '' }
 }, { timestamps: true });

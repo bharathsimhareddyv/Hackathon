@@ -120,7 +120,7 @@ export default function AdminSettings() {
 
       <section className="glass-panel max-w-3xl rounded-2xl border border-amber-500/20 p-6 sm:p-8">
         <div className="flex items-center gap-2"><KeyRound className="h-4 w-4 text-amber-300" /><h2 className="font-bold text-white">Change admin password</h2></div>
-        <p className="mt-2 text-xs text-slate-400">A one-time verification code is sent to the configured organizer email before a new password can be saved.</p>
+        <p className="mt-2 text-xs text-slate-400">A one-time verification code is sent to your admin account email before a new password can be saved.</p>
         {!otpSent ? <button type="button" onClick={requestPasswordCode} className="mt-5 rounded-lg border border-amber-700 bg-amber-950/40 px-4 py-2.5 text-xs font-bold text-amber-100 hover:bg-amber-900/50">Send verification code</button> : <form onSubmit={verifyAndChangePassword} className="mt-5 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <label className="text-xs text-slate-300">6-digit code<input inputMode="numeric" pattern="[0-9]{6}" required value={otpCode} onChange={event => setOtpCode(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
           <label className="text-xs text-slate-300">New password<input type="password" minLength="8" required value={newPassword} onChange={event => setNewPassword(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>

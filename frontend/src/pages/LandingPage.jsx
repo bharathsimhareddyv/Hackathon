@@ -66,13 +66,6 @@ export default function LandingPage() {
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Link>
 
-            <Link
-              to="/admin-login"
-              className="w-full sm:w-auto px-8 py-4 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-200 font-bold text-base hover:border-indigo-500 hover:text-white transition-all shadow-lg flex items-center justify-center gap-2"
-            >
-              <Shield className="w-5 h-5 text-indigo-400" />
-              <span>ADMIN LOGIN</span>
-            </Link>
           </div>
 
           {/* Key Stat Cards */}

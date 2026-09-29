@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, LogOut, LayoutDashboard, FileText, Trophy, Code2 } from 'lucide-react';
+import { LogOut, LayoutDashboard, FileText, Trophy, Code2 } from 'lucide-react';
 import AarohanLogo from './AarohanLogo';
 
 export default function Navbar() {
@@ -75,13 +75,6 @@ export default function Navbar() {
               >
                 <Code2 className="w-4 h-4" />
                 TEAM LOGIN
-              </Link>
-              <Link
-                to="/admin-login"
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-300 font-semibold text-xs sm:text-sm hover:border-indigo-500 hover:text-white transition-all"
-              >
-                <Shield className="w-3.5 h-3.5 text-indigo-400" />
-                ADMIN LOGIN
               </Link>
             </div>
           )}
