@@ -2,11 +2,10 @@ export async function downloadProject(project, api) {
   const fileName = project.originalFileName || `${project.name || 'project'}.zip`;
 
   if (project.filePath?.startsWith('https://')) {
+    const response = await api.get(`/projects/${project._id}/download`);
     const link = document.createElement('a');
-    link.href = project.filePath;
-    link.download = fileName;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
+    link.href = response.data.downloadUrl;
+    link.download = response.data.fileName || fileName;
     document.body.appendChild(link);
     link.click();
     link.remove();

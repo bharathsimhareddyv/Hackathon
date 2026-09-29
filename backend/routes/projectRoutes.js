@@ -8,7 +8,7 @@ const DownloadLog = require('../models/DownloadLog');
 const ActivityLog = require('../models/ActivityLog');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
 const { uploadProject } = require('../middleware/uploadMiddleware');
-const { isCloudinaryConfigured, uploadToCloudinary } = require('../config/cloudinary');
+const { isCloudinaryConfigured, uploadToCloudinary, createRawDownloadUrl } = require('../config/cloudinary');
 
 // @route GET /api/projects/:id/download
 // Accessible by logged in student or admin
@@ -45,7 +45,10 @@ router.get('/:id/download', protect, async (req, res) => {
     const downloadName = path.basename(project.originalFileName || `${project.name}.zip`);
 
     if (project.filePath && (project.filePath.startsWith('http://') || project.filePath.startsWith('https://'))) {
-      return res.redirect(302, project.filePath);
+      return res.json({
+        downloadUrl: createRawDownloadUrl(project.filePath),
+        fileName: downloadName
+      });
     }
 
     if (!project.filePath || !fs.existsSync(project.filePath)) {

@@ -14,6 +14,40 @@ const isCloudinaryConfigured = () => {
   );
 };
 
+const createRawDownloadUrl = (secureUrl) => {
+  if (!isCloudinaryConfigured()) {
+    throw new Error('Cloudinary environment variables not configured in .env');
+  }
+
+  const url = new URL(secureUrl);
+  const parts = url.pathname.split('/').filter(Boolean);
+  if (url.hostname !== 'res.cloudinary.com' || parts[0] !== process.env.CLOUDINARY_CLOUD_NAME) {
+    throw new Error('Project file is not hosted in the configured Cloudinary account');
+  }
+
+  const resourceType = parts[1];
+  const deliveryType = parts[2];
+  const versionIndex = parts.findIndex((part, index) =>
+    index > 2 && part.startsWith('v') && part.length > 1 && !Number.isNaN(Number(part.slice(1)))
+  );
+  if (resourceType !== 'raw' || !['upload', 'private', 'authenticated'].includes(deliveryType) || versionIndex < 0) {
+    throw new Error('Cloudinary project URL format is invalid');
+  }
+
+  const publicId = parts.slice(versionIndex + 1).join('/');
+  const extension = publicId.split('.').pop();
+  if (!publicId || !extension || extension === publicId) {
+    throw new Error('Cloudinary raw file extension is missing');
+  }
+
+  return cloudinary.utils.private_download_url(publicId, extension, {
+    resource_type: resourceType,
+    type: deliveryType,
+    expires_at: Math.floor(Date.now() / 1000) + 300,
+    attachment: true
+  });
+};
+
 /**
  * Uploads a file buffer or file path to Cloudinary as a raw file (for ZIPs, PDFs, etc.) or auto file.
  */
@@ -43,4 +77,4 @@ const uploadToCloudinary = (fileBuffer, originalName, folder = 'aarohan_projects
   });
 };
 
-module.exports = { cloudinary, isCloudinaryConfigured, uploadToCloudinary };
+module.exports = { cloudinary, isCloudinaryConfigured, uploadToCloudinary, createRawDownloadUrl };
