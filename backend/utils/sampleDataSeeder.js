@@ -198,7 +198,7 @@ async function seedInitialData() {
         status: 'SCHEDULED',
         maxMarks: 100,
         qualificationCriteria: { minErrorsSolved: 0, minPercentage: 70, minMarks: 70, ruleType: 'OR' },
-        githubRepoUrl: 'https://github.com/aarohan-hackathon/round2-react-starter',
+        githubRepoUrl: '',
         active: false
       });
 
@@ -221,6 +221,10 @@ async function seedInitialData() {
       await round3.save();
       console.log('Rounds 1, 2, and 3 initialized.');
     }
+
+    const placeholderRepo = 'https://github.com/aarohan-hackathon/round2-react-starter';
+    await Round.updateMany({ githubRepoUrl: placeholderRepo }, { $set: { githubRepoUrl: '' } });
+    await Project.updateMany({ githubUrl: placeholderRepo }, { $set: { githubUrl: '' } });
 
   } catch (error) {
     console.error('Data Seeding Error:', error);
@@ -339,7 +343,7 @@ async function seedDemoData() {
     description: 'React state management and API integration challenge.',
     filePath: project2ZipPath,
     originalFileName: 'Round2_React_Starter.zip',
-    githubUrl: 'https://github.com/aarohan-hackathon/round2-react-starter',
+    githubUrl: '',
     instructions: 'Clone repo or download ZIP. Build student registration components.',
     maxTasks: 10
   });

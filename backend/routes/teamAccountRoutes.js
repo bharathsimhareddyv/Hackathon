@@ -80,7 +80,7 @@ router.post('/create', async (req, res) => {
       return res.status(400).json({ message: 'roundNumber is required' });
     }
 
-    const loginId = (customLoginId || await nextAarohanTeamLoginId()).toLowerCase().trim();
+    const loginId = (customLoginId || await nextAarohanTeamLoginId(roundNumber)).toLowerCase().trim();
     const existing = await TeamAccount.findOne({ loginId });
     if (existing) {
       return res.status(400).json({ message: `Login ID ${loginId} already exists` });
@@ -146,7 +146,7 @@ router.post('/bulk-generate', async (req, res) => {
 
     const created = [];
     for (let i = 0; i < n; i++) {
-      const loginId = await nextAarohanTeamLoginId();
+      const loginId = await nextAarohanTeamLoginId(rNum);
       const plainPassword = generateRandomPassword();
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(plainPassword, salt);

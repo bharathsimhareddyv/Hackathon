@@ -100,6 +100,23 @@ router.post('/upload', uploadProject.single('projectZip'), async (req, res) => {
       return res.status(400).json({ message: 'Project name and round number are required' });
     }
 
+    let repositoryUrl = '';
+    if (githubUrl) {
+      try {
+        const parsedUrl = new URL(githubUrl);
+        if (parsedUrl.protocol !== 'https:' || !['github.com', 'www.github.com'].includes(parsedUrl.hostname)) {
+          throw new Error('Invalid GitHub URL');
+        }
+        repositoryUrl = parsedUrl.toString();
+      } catch {
+        return res.status(400).json({ message: 'Enter a valid HTTPS GitHub repository URL' });
+      }
+    }
+
+    if (Boolean(req.file) === Boolean(repositoryUrl)) {
+      return res.status(400).json({ message: 'Choose exactly one project source: upload a ZIP or provide a GitHub repository URL' });
+    }
+
     let filePath = null;
     let originalFileName = null;
     let fileSize = 0;
@@ -123,7 +140,7 @@ router.post('/upload', uploadProject.single('projectZip'), async (req, res) => {
       filePath,
       originalFileName,
       fileSize,
-      githubUrl: githubUrl || '',
+      githubUrl: repositoryUrl,
       instructions: instructions || '',
       totalErrors: totalErrors ? parseInt(totalErrors, 10) : 200,
       htmlErrors: htmlErrors ? parseInt(htmlErrors, 10) : 50,
