@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
+const { Readable } = require('stream');
 const Project = require('../models/Project');
 const DownloadLog = require('../models/DownloadLog');
 const ActivityLog = require('../models/ActivityLog');
@@ -26,16 +27,26 @@ router.get('/:id/download', protect, async (req, res) => {
       });
     }
 
-    // Check if filePath is a Cloudinary HTTPS URL or local file path
+    const downloadName = path.basename(project.originalFileName || `${project.name}.zip`);
+
+    // Proxy Cloudinary files so authenticated browser requests do not depend on cross-origin redirects.
     if (project.filePath && (project.filePath.startsWith('http://') || project.filePath.startsWith('https://'))) {
-      return res.redirect(project.filePath);
+      const upstream = await fetch(project.filePath);
+      if (!upstream.ok || !upstream.body) {
+        return res.status(502).json({ message: 'Cloudinary could not provide this project file' });
+      }
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${downloadName.replace(/["\\\r\n]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
+      const contentLength = upstream.headers.get('content-length');
+      if (contentLength) res.setHeader('Content-Length', contentLength);
+      return Readable.fromWeb(upstream.body).pipe(res);
     }
 
     if (!project.filePath || !fs.existsSync(project.filePath)) {
       return res.status(404).json({ message: 'Project file not found on server' });
     }
 
-    res.download(project.filePath, project.originalFileName || `${project.name}.zip`);
+    res.download(project.filePath, downloadName);
   } catch (error) {
     console.error('Download Project Error:', error);
     res.status(500).json({ message: 'Failed to download project' });

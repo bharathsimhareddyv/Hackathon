@@ -18,6 +18,9 @@ const protect = async (req, res, next) => {
         req.user.role = 'ADMIN';
       } else if (decoded.role === 'TEAM') {
         req.user = await TeamAccount.findById(decoded.id).select('-passwordHash');
+        if (req.user && req.user.status !== 'ACTIVE') {
+          return res.status(403).json({ message: 'This team account is blocked or inactive' });
+        }
         req.user.role = 'TEAM';
       } else if (decoded.role === 'STUDENT') {
         req.user = await Participant.findById(decoded.id).select('-passwordHash');

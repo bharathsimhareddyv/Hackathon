@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { KeyRound, Mail, Plus, RefreshCw, Send, Users } from 'lucide-react';
+import { Download, Eye, EyeOff, KeyRound, Lock, Mail, Plus, RefreshCw, Send, Trash2, Unlock, Users } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -16,6 +16,7 @@ export default function AdminTeamAccounts() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [emailDrafts, setEmailDrafts] = useState({});
+  const [showPasswords, setShowPasswords] = useState(false);
 
   const refresh = async () => {
     try {
@@ -105,6 +106,48 @@ export default function AdminTeamAccounts() {
     } catch (err) { showToast(err.response?.data?.message || 'Password reset failed', 'error'); }
   };
 
+  const downloadCsv = (filename, rows) => {
+    const csv = rows.map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\r\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportGeneratedCredentials = () => {
+    downloadCsv('aarohan_new_team_credentials.csv', [
+      ['Team login ID', 'Password', 'Members'],
+      ...credentials.map(team => [team.loginId, team.password, (team.memberNames || []).join('; ')])
+    ]);
+  };
+
+  const exportAllCredentials = () => {
+    downloadCsv('aarohan_team_credentials.csv', [
+      ['Team login ID', 'Temporary password', 'Status', 'Current round', 'Members', 'Contact emails'],
+      ...teams.map(team => [
+        team.loginId,
+        team.temporaryPasswordPlain || 'Password changed; reset required',
+        team.status,
+        team.currentRound,
+        (team.memberNames || []).join('; '),
+        (team.contactEmails || []).join('; ')
+      ])
+    ]);
+  };
+
+  const deleteTeam = async team => {
+    if (!window.confirm(`Delete ${team.loginId}? Its round assignments, claims, evaluations, and submissions will also be deleted.`)) return;
+    try {
+      const response = await api.delete(`/admin/team-accounts/${team._id}`);
+      setSelected(current => current.filter(id => id !== team._id));
+      showToast(response.data.message, 'success');
+      refresh();
+    } catch (err) { showToast(err.response?.data?.message || 'Could not delete team', 'error'); }
+  };
+
   return <div className="space-y-7">
     <header><p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Access and invitations</p><h1 className="mt-1 font-outfit text-3xl font-extrabold text-white">Team accounts</h1><p className="mt-2 text-sm text-slate-400">Create randomized team IDs, assign rounds, manage contact emails, and send welcome details in bulk.</p></header>
     <div className="grid gap-6 xl:grid-cols-2">
@@ -129,11 +172,11 @@ export default function AdminTeamAccounts() {
       </section>
     </div>
 
-    {credentials.length > 0 && <section className="glass-panel rounded-2xl border border-amber-500/30 p-5"><h2 className="flex items-center gap-2 font-bold text-amber-100"><KeyRound className="h-4 w-4" /> Newly generated credentials</h2><p className="mt-1 text-xs text-amber-200/70">Copy these credentials into your invitation. Passwords are shown only for this generated batch.</p><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{credentials.map(item => <div key={item.loginId} className="rounded-lg bg-slate-950/70 p-3 font-mono text-xs"><strong className="text-cyan-200">{item.loginId}</strong><p className="mt-1 text-slate-300">{item.password}</p></div>)}</div></section>}
+    {credentials.length > 0 && <section className="glass-panel rounded-2xl border border-amber-500/30 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="flex items-center gap-2 font-bold text-amber-100"><KeyRound className="h-4 w-4" /> Newly generated credentials</h2><p className="mt-1 text-xs text-amber-200/70">Download this batch as an Excel-compatible CSV for distribution.</p></div><button onClick={exportGeneratedCredentials} className="flex items-center gap-2 rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white hover:bg-amber-600"><Download className="h-4 w-4" />Download CSV</button></div><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{credentials.map(item => <div key={item.loginId} className="rounded-lg bg-slate-950/70 p-3 font-mono text-xs"><strong className="text-cyan-200">{item.loginId}</strong><p className="mt-1 text-slate-300">{item.password}</p></div>)}</div></section>}
 
     <section className="glass-panel rounded-2xl border border-slate-800 p-5 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4"><div><h2 className="font-bold text-white">Created accounts</h2><p className="mt-1 text-xs text-slate-500">{teams.length} teams · select teams to send messages or results</p></div><div className="flex flex-wrap gap-2"><button onClick={sendWelcome} disabled={!selected.length || working} className="flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"><Send className="h-4 w-4" />Welcome · {selected.length}</button><button onClick={() => sendStatusEmail('qualified')} disabled={!selected.length || working} className="rounded-lg border border-cyan-700 px-3 py-2 text-xs font-bold text-cyan-200 disabled:opacity-40">Qualified · {selected.length}</button><button onClick={() => sendStatusEmail('eliminated')} disabled={!selected.length || working} className="rounded-lg border border-rose-800 px-3 py-2 text-xs font-bold text-rose-200 disabled:opacity-40">Eliminated · {selected.length}</button></div></div>
-      {loading ? <p className="py-8 text-center text-sm text-slate-500">Loading accounts…</p> : <div className="mt-3 divide-y divide-slate-800">{teams.map(team => <article key={team._id} className="grid gap-3 py-4 md:grid-cols-[auto_1fr_2fr_auto_auto] md:items-center"><input type="checkbox" aria-label={`Select ${team.loginId}`} checked={selected.includes(team._id)} onChange={event => setSelected(current => event.target.checked ? [...current, team._id] : current.filter(id => id !== team._id))} className="h-4 w-4 accent-emerald-500" /><div><p className="font-mono font-bold text-cyan-200">{team.loginId}</p><p className="mt-1 text-[11px] text-slate-500">Round {team.currentRound}</p></div><label className="relative block"><Mail className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-500" /><input value={emailDrafts[team._id] || ''} onChange={event => setEmailDrafts(current => ({ ...current, [team._id]: event.target.value }))} placeholder="Add emails separated by commas" className="glass-input w-full rounded-lg py-2 pl-9 pr-3 text-xs" /></label><div className="flex gap-2"><button onClick={() => saveEmails(team)} className="rounded-lg border border-slate-700 px-3 py-2 text-[11px] font-semibold text-slate-300 hover:border-emerald-600">Save email</button><button onClick={() => resetPassword(team)} title="Generate a new password" className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:border-amber-500 hover:text-amber-200"><KeyRound className="h-4 w-4" /></button></div><select aria-label={`Status for ${team.loginId}`} value={team.status} onChange={event => updateStatus(team, event.target.value)} className="glass-input rounded-lg px-2 py-2 text-[11px]"><option value="ACTIVE">Active</option><option value="ELIMINATED">Eliminated</option><option value="DISQUALIFIED">Disqualified</option><option value="QUALIFIED_PENDING">Pending review</option></select></article>)}</div>}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4"><div><h2 className="font-bold text-white">Created accounts</h2><p className="mt-1 text-xs text-slate-500">{teams.length} teams · select teams to send messages or results</p></div><div className="flex flex-wrap gap-2"><button onClick={() => setShowPasswords(value => !value)} className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs font-bold text-slate-200">{showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}{showPasswords ? 'Hide passwords' : 'Show passwords'}</button><button onClick={exportAllCredentials} disabled={!teams.length} className="flex items-center gap-2 rounded-lg border border-amber-700 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-40"><Download className="h-4 w-4" />Excel-compatible CSV</button><button onClick={sendWelcome} disabled={!selected.length || working} className="flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"><Send className="h-4 w-4" />Welcome · {selected.length}</button><button onClick={() => sendStatusEmail('qualified')} disabled={!selected.length || working} className="rounded-lg border border-cyan-700 px-3 py-2 text-xs font-bold text-cyan-200 disabled:opacity-40">Qualified · {selected.length}</button><button onClick={() => sendStatusEmail('eliminated')} disabled={!selected.length || working} className="rounded-lg border border-rose-800 px-3 py-2 text-xs font-bold text-rose-200 disabled:opacity-40">Eliminated · {selected.length}</button></div></div>
+      {loading ? <p className="py-8 text-center text-sm text-slate-500">Loading accounts…</p> : <div className="mt-3 divide-y divide-slate-800">{teams.map(team => <article key={team._id} className="grid gap-3 py-4 md:grid-cols-[auto_1fr_2fr_auto_auto] md:items-center"><input type="checkbox" aria-label={`Select ${team.loginId}`} checked={selected.includes(team._id)} onChange={event => setSelected(current => event.target.checked ? [...current, team._id] : current.filter(id => id !== team._id))} className="h-4 w-4 accent-emerald-500" /><div><p className="font-mono font-bold text-cyan-200">{team.loginId}</p><p className="mt-1 text-[11px] text-slate-500">Round {team.currentRound} · {team.status}</p>{showPasswords && <p className="mt-1 break-all font-mono text-xs text-amber-200">{team.temporaryPasswordPlain || 'Password changed; reset to generate a new one'}</p>}</div><label className="relative block"><Mail className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-500" /><input value={emailDrafts[team._id] || ''} onChange={event => setEmailDrafts(current => ({ ...current, [team._id]: event.target.value }))} placeholder="Add emails separated by commas" className="glass-input w-full rounded-lg py-2 pl-9 pr-3 text-xs" /></label><div className="flex flex-wrap gap-2"><button onClick={() => saveEmails(team)} className="rounded-lg border border-slate-700 px-3 py-2 text-[11px] font-semibold text-slate-300 hover:border-emerald-600">Save email</button><button onClick={() => resetPassword(team)} title="Generate a new password" aria-label={`Reset ${team.loginId} password`} className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:border-amber-500 hover:text-amber-200"><KeyRound className="h-4 w-4" /></button><button onClick={() => updateStatus(team, team.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED')} title={team.status === 'BLOCKED' ? 'Unblock team' : 'Block team'} aria-label={team.status === 'BLOCKED' ? `Unblock ${team.loginId}` : `Block ${team.loginId}`} className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:border-amber-500 hover:text-amber-200">{team.status === 'BLOCKED' ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}</button><button onClick={() => deleteTeam(team)} title="Delete team account and related data" aria-label={`Delete ${team.loginId}`} className="rounded-lg border border-rose-900 p-2 text-rose-300 hover:bg-rose-950"><Trash2 className="h-4 w-4" /></button></div><select aria-label={`Status for ${team.loginId}`} value={team.status} onChange={event => updateStatus(team, event.target.value)} className="glass-input rounded-lg px-2 py-2 text-[11px]"><option value="ACTIVE">Active</option><option value="BLOCKED">Blocked</option><option value="ELIMINATED">Eliminated</option><option value="DISQUALIFIED">Disqualified</option><option value="QUALIFIED_PENDING">Pending review</option></select></article>)}</div>}
     </section>
   </div>;
 }

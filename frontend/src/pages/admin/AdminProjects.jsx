@@ -8,6 +8,7 @@ export default function AdminProjects() {
   const [rounds, setRounds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState('');
 
   // Upload Form State
   const [name, setName] = useState('');
@@ -94,6 +95,25 @@ export default function AdminProjects() {
     } catch (err) {
       console.error('Delete Project Error:', err);
       showToast('Failed to delete project', 'error');
+    }
+  };
+
+  const handleDownloadProject = async (project) => {
+    try {
+      setDownloadingId(project._id);
+      const response = await api.get(`/projects/${project._id}/download`, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = project.originalFileName || `${project.name}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Project download failed', 'error');
+    } finally {
+      setDownloadingId('');
     }
   };
 
@@ -279,13 +299,10 @@ export default function AdminProjects() {
                 <div className="pt-2 border-t border-slate-900 text-xs font-mono text-slate-400 flex items-center justify-between">
                   <span>Size: {(p.fileSize / 1024).toFixed(1)} KB</span>
                   {p.filePath && (
-                    <a
-                      href={`/api/projects/${p._id}/download`}
-                      className="text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
-                    >
+                    <button onClick={() => handleDownloadProject(p)} disabled={downloadingId === p._id} className="text-cyan-400 hover:underline flex items-center gap-1 font-semibold disabled:opacity-50">
                       <Download className="w-3.5 h-3.5" />
-                      <span>Download ZIP</span>
-                    </a>
+                      <span>{downloadingId === p._id ? 'Downloading…' : 'Download ZIP'}</span>
+                    </button>
                   )}
                 </div>
               </div>

@@ -18,6 +18,7 @@ export default function TeamDashboard() {
   const [proofZip, setProofZip] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   const refresh = async () => {
     try {
@@ -47,15 +48,20 @@ export default function TeamDashboard() {
 
   const handleDownload = async (project) => {
     try {
+      setDownloading(true);
       const response = await api.get(`/projects/${project._id}/download`, { responseType: 'blob' });
       const url = URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
       link.download = project.originalFileName || `${project.name}.zip`;
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       showToast(err.response?.data?.message || 'Download failed', 'error');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -63,9 +69,9 @@ export default function TeamDashboard() {
     event.preventDefault();
     const form = new FormData();
     form.append('roundNumber', roundNumber);
-    form.append('claimedPercentage', percentage);
+    if (percentage.trim()) form.append('claimedPercentage', percentage);
     form.append('claimedErrorsSolved', errorsSolved || '0');
-    form.append('githubUrl', githubUrl);
+    if (githubUrl.trim()) form.append('githubUrl', githubUrl.trim());
     form.append('notes', notes);
     if (proofZip) form.append('proofZip', proofZip);
 
@@ -107,16 +113,16 @@ export default function TeamDashboard() {
           {selectedRound?.criteriaSummary && <p className="mt-3 rounded-lg border-l-2 border-amber-400 bg-amber-950/20 px-3 py-2 text-sm text-amber-100">{selectedRound.criteriaSummary}</p>}
           {selectedRound?.githubRepoUrl && <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-4"><p className="flex items-center gap-2 text-xs font-semibold text-slate-300"><GitBranch className="h-4 w-4 text-emerald-300" /> Repository</p><a href={selectedRound.githubRepoUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-2 break-all text-sm text-emerald-300 hover:underline">{selectedRound.githubRepoUrl}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a><code className="mt-3 block overflow-x-auto rounded-lg bg-black/40 p-3 text-xs text-slate-300">git clone {selectedRound.githubRepoUrl}</code></div>}
           {!selectedRound?.githubRepoUrl && assignment?.projectId?.githubUrl && <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-4"><p className="flex items-center gap-2 text-xs font-semibold text-slate-300"><GitBranch className="h-4 w-4 text-emerald-300" /> Repository</p><a href={assignment.projectId.githubUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-2 break-all text-sm text-emerald-300 hover:underline">{assignment.projectId.githubUrl}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a><code className="mt-3 block overflow-x-auto rounded-lg bg-black/40 p-3 text-xs text-slate-300">git clone {assignment.projectId.githubUrl}</code></div>}
-          {assignment?.projectId && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-4"><div><p className="font-semibold text-white">{assignment.projectId.name}</p><p className="mt-1 text-xs text-slate-400">{assignment.projectId.originalFileName || 'Project archive'}</p></div><button onClick={() => handleDownload(assignment.projectId)} className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500"><ArrowDownToLine className="h-4 w-4" /> Download ZIP</button></div>}
+          {assignment?.projectId && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-4"><div><p className="font-semibold text-white">{assignment.projectId.name}</p><p className="mt-1 text-xs text-slate-400">{assignment.projectId.originalFileName || 'Project archive'}</p></div><button disabled={downloading} onClick={() => handleDownload(assignment.projectId)} className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50"><ArrowDownToLine className="h-4 w-4" />{downloading ? 'Downloading…' : 'Download ZIP'}</button></div>}
           {!assignment && <p className="mt-5 text-sm text-amber-200">No team assignment is available for this round yet.</p>}
         </section>
 
         <section className="glass-panel rounded-2xl border border-slate-800 p-5 sm:p-7">
           <p className="text-xs font-bold uppercase tracking-widest text-emerald-300">Progress review</p><h2 className="mt-1 text-xl font-bold text-white">Submit your progress</h2><p className="mt-2 text-xs leading-5 text-slate-400">Claims count only after organizer approval. Your criteria and deadline are set by the organizer.</p>
           {deadlinePassed ? <p className="mt-5 rounded-lg border border-rose-800 bg-rose-950/30 p-3 text-sm text-rose-200">This round’s submission window is closed.</p> : <form onSubmit={submitClaim} className="mt-5 space-y-4">
-            <label className="block text-xs text-slate-300">Completion percentage<input type="number" min="0" max="100" step="0.1" required value={percentage} onChange={event => setPercentage(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" placeholder="0–100" /></label>
+            <label className="block text-xs text-slate-300">Completion percentage (optional)<input type="number" min="0" max="100" step="0.1" value={percentage} onChange={event => setPercentage(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" placeholder="Leave blank if unavailable" /></label>
             <label className="block text-xs text-slate-300">Errors solved<input type="number" min="0" value={errorsSolved} onChange={event => setErrorsSolved(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
-            <label className="block text-xs text-slate-300">Repository URL<input type="url" value={githubUrl} onChange={event => setGithubUrl(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" placeholder="https://github.com/..." /></label>
+            <label className="block text-xs text-slate-300">Repository URL (optional)<input type="url" value={githubUrl} onChange={event => setGithubUrl(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" placeholder="https://github.com/..." /></label>
             <label className="block text-xs text-slate-300">Notes<textarea rows="3" value={notes} onChange={event => setNotes(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
             <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-700 p-3 text-xs text-slate-300"><UploadCloud className="h-4 w-4 text-emerald-300" /><span className="min-w-0 flex-1 truncate">{proofZip?.name || 'Attach optional ZIP evidence'}</span><input type="file" accept=".zip" onChange={event => setProofZip(event.target.files[0])} className="sr-only" /></label>
             <button disabled={submitting || !assignment} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-50"><Send className="h-4 w-4" />{submitting ? 'Submitting…' : 'Send for approval'}</button>
@@ -125,7 +131,7 @@ export default function TeamDashboard() {
 
         <section className="glass-panel rounded-2xl border border-slate-800 p-5 sm:p-7 lg:col-span-2">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3"><h2 className="font-bold text-white">Submission history</h2><span className="text-xs text-slate-500">{claims.length} claims</span></div>
-          {claims.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No progress claims submitted.</p> : <div className="divide-y divide-slate-800">{claims.map(claim => <article key={claim._id} className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm"><div><p className="font-semibold text-white">Round {claim.roundNumber} · {claim.claimedPercentage}%</p><p className="mt-1 text-xs text-slate-500">Submitted {new Date(claim.submittedAt).toLocaleString()}{claim.rejectionReason ? ` · ${claim.rejectionReason}` : ''}</p></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${claim.status === 'APPROVED' ? 'bg-emerald-950 text-emerald-300' : claim.status === 'REJECTED' ? 'bg-rose-950 text-rose-300' : 'bg-amber-950 text-amber-200'}`}>{claim.status}</span></article>)}</div>}
+          {claims.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No progress claims submitted.</p> : <div className="divide-y divide-slate-800">{claims.map(claim => <article key={claim._id} className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm"><div><p className="font-semibold text-white">Round {claim.roundNumber} · {claim.claimedPercentage == null ? 'Percentage not provided' : `${claim.claimedPercentage}%`}</p><p className="mt-1 text-xs text-slate-500">Submitted {new Date(claim.submittedAt).toLocaleString()}{claim.rejectionReason ? ` · ${claim.rejectionReason}` : ''}</p></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${claim.status === 'APPROVED' ? 'bg-emerald-950 text-emerald-300' : claim.status === 'REJECTED' ? 'bg-rose-950 text-rose-300' : 'bg-amber-950 text-amber-200'}`}>{claim.status}</span></article>)}</div>}
         </section>
       </div>
     </main>

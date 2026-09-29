@@ -20,10 +20,10 @@ router.post('/', protect, teamOnly, uploadSubmission.single('proofZip'), async (
 
     const { roundNumber, claimedPercentage, claimedErrorsSolved, githubUrl, notes } = req.body;
     const rNum = parseInt(roundNumber, 10);
-    const pct = parseFloat(claimedPercentage);
+    const pct = String(claimedPercentage ?? '').trim() === '' ? null : Number(claimedPercentage);
 
-    if (!rNum || Number.isNaN(pct) || pct < 0 || pct > 100) {
-      return res.status(400).json({ message: 'Valid roundNumber and claimedPercentage (0-100) required' });
+    if (!rNum || (pct !== null && (!Number.isFinite(pct) || pct < 0 || pct > 100))) {
+      return res.status(400).json({ message: 'Round number is required; completion percentage must be between 0 and 100 when provided' });
     }
 
     const round = await Round.findOne({ roundNumber: rNum });
@@ -62,7 +62,7 @@ router.post('/', protect, teamOnly, uploadSubmission.single('proofZip'), async (
       teamCode: team.teamCode,
       claimedPercentage: pct,
       claimedErrorsSolved: parseInt(claimedErrorsSolved, 10) || 0,
-      githubUrl: githubUrl || '',
+      githubUrl: String(githubUrl || '').trim(),
       notes: notes || '',
       zipPath,
       zipOriginalName,
@@ -74,7 +74,9 @@ router.post('/', protect, teamOnly, uploadSubmission.single('proofZip'), async (
       action: 'PROGRESS_CLAIM_SUBMITTED',
       roundNumber: rNum,
       teamId: team.teamCode,
-      details: `Claimed ${pct}% progress (pending approval)`
+      details: pct === null
+        ? 'Submitted progress for review without a completion percentage'
+        : `Claimed ${pct}% progress (pending approval)`
     });
 
     res.status(201).json({ message: 'Progress submitted — awaiting admin approval', claim });
@@ -127,7 +129,7 @@ router.post('/admin/:id/approve', async (req, res) => {
 
     const round = await Round.findOne({ roundNumber: claim.roundNumber });
     const requiredPercentage = round?.qualificationCriteria?.minPercentage ?? round?.requiredMinPercentage ?? 0;
-    if (claim.claimedPercentage < requiredPercentage) {
+    if (claim.claimedPercentage !== null && claim.claimedPercentage !== undefined && claim.claimedPercentage < requiredPercentage) {
       return res.status(400).json({ message: `Claim is below the round requirement of ${requiredPercentage}%` });
     }
 
@@ -137,27 +139,30 @@ router.post('/admin/:id/approve', async (req, res) => {
     claim.rejectionReason = '';
     await claim.save();
 
-    const team = await RoundTeam.findById(claim.teamId);
-    let evaluation = await Evaluation.findOne({ roundNumber: claim.roundNumber, teamId: claim.teamId });
-    if (!evaluation && team) {
-      evaluation = new Evaluation({
-        roundNumber: claim.roundNumber,
-        teamId: team._id,
-        teamCode: team.teamCode,
-        participantIds: team.participantIds || [],
-        marks: 0,
-        maxMarks: round?.maxMarks || 100
-      });
-    }
-    if (evaluation) {
-      const totalErrors = evaluation.totalErrors || 200;
-      evaluation.errorsSolved = claim.claimedErrorsSolved || Math.round((claim.claimedPercentage / 100) * totalErrors);
-      evaluation.marks = Math.round((claim.claimedPercentage / 100) * (round?.maxMarks || evaluation.maxMarks || 100));
-      evaluation.maxMarks = round?.maxMarks || evaluation.maxMarks || 100;
-      evaluation.remarks = `Approved progress: ${claim.claimedPercentage}%`;
-      evaluation.evaluatedBy = req.user.username || 'Admin';
-      evaluation.evaluatedAt = new Date();
-      await evaluation.save();
+    let evaluation = null;
+    if (claim.claimedPercentage !== null && claim.claimedPercentage !== undefined) {
+      const team = await RoundTeam.findById(claim.teamId);
+      evaluation = await Evaluation.findOne({ roundNumber: claim.roundNumber, teamId: claim.teamId });
+      if (!evaluation && team) {
+        evaluation = new Evaluation({
+          roundNumber: claim.roundNumber,
+          teamId: team._id,
+          teamCode: team.teamCode,
+          participantIds: team.participantIds || [],
+          marks: 0,
+          maxMarks: round?.maxMarks || 100
+        });
+      }
+      if (evaluation) {
+        const totalErrors = evaluation.totalErrors || 200;
+        evaluation.errorsSolved = claim.claimedErrorsSolved || Math.round((claim.claimedPercentage / 100) * totalErrors);
+        evaluation.marks = Math.round((claim.claimedPercentage / 100) * (round?.maxMarks || evaluation.maxMarks || 100));
+        evaluation.maxMarks = round?.maxMarks || evaluation.maxMarks || 100;
+        evaluation.remarks = `Approved progress: ${claim.claimedPercentage}%`;
+        evaluation.evaluatedBy = req.user.username || 'Admin';
+        evaluation.evaluatedAt = new Date();
+        await evaluation.save();
+      }
     }
 
     await ActivityLog.create({
@@ -165,7 +170,9 @@ router.post('/admin/:id/approve', async (req, res) => {
       action: 'PROGRESS_APPROVED',
       roundNumber: claim.roundNumber,
       teamId: claim.teamCode,
-      details: `Approved ${claim.claimedPercentage}% for ${claim.teamCode}`
+      details: claim.claimedPercentage === null || claim.claimedPercentage === undefined
+        ? `Approved progress update without a percentage for ${claim.teamCode}`
+        : `Approved ${claim.claimedPercentage}% for ${claim.teamCode}`
     });
 
     res.json({ message: 'Progress approved', claim, evaluation });

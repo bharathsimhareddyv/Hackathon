@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, KeyRound, Users } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, KeyRound, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function TeamLogin() {
@@ -8,6 +8,7 @@ export default function TeamLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { teamLogin } = useAuth();
   const navigate = useNavigate();
 
@@ -45,7 +46,8 @@ export default function TeamLogin() {
           <label className="block text-xs font-semibold text-slate-300">Password
             <span className="relative mt-2 block">
               <KeyRound className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
-              <input type="password" value={password} onChange={event => setPassword(event.target.value)} autoComplete="current-password" required className="glass-input w-full rounded-xl py-3 pl-10 pr-4 text-sm" />
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} autoComplete="current-password" required className="glass-input w-full rounded-xl py-3 pl-10 pr-11 text-sm" />
+              <button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'} title={showPassword ? 'Hide password' : 'Show password'} className="absolute right-3 top-3 text-slate-400 hover:text-white">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
             </span>
           </label>
           <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50">

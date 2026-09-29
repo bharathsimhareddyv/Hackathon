@@ -15,7 +15,7 @@ const TeamAccountSchema = new mongoose.Schema({
   currentRound: { type: Number, default: 1 },
   status: {
     type: String,
-    enum: ['ACTIVE', 'ELIMINATED', 'DISQUALIFIED', 'QUALIFIED_PENDING'],
+    enum: ['ACTIVE', 'BLOCKED', 'ELIMINATED', 'DISQUALIFIED', 'QUALIFIED_PENDING'],
     default: 'ACTIVE'
   },
   eliminatedAtRound: { type: Number, default: null },

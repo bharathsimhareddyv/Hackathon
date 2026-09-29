@@ -4,6 +4,9 @@ const bcrypt = require('bcryptjs');
 const RoundTeam = require('../models/RoundTeam');
 const TeamAccount = require('../models/TeamAccount');
 const Participant = require('../models/Participant');
+const ProgressClaim = require('../models/ProgressClaim');
+const Evaluation = require('../models/Evaluation');
+const Submission = require('../models/Submission');
 const Round = require('../models/Round');
 const ActivityLog = require('../models/ActivityLog');
 const { protect, adminOnly, teamOnly } = require('../middleware/authMiddleware');
@@ -284,6 +287,33 @@ router.put('/:id', async (req, res) => {
     res.json(account);
   } catch (error) {
     res.status(500).json({ message: 'Failed to update team' });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const account = await TeamAccount.findById(req.params.id);
+    if (!account) return res.status(404).json({ message: 'Team not found' });
+
+    const roundTeams = await RoundTeam.find({ teamAccountId: account._id }).select('_id roundNumber');
+    const roundTeamIds = roundTeams.map(team => team._id);
+    await Promise.all([
+      ProgressClaim.deleteMany({ teamAccountId: account._id }),
+      Evaluation.deleteMany({ teamId: { $in: roundTeamIds } }),
+      Submission.deleteMany({ teamId: { $in: roundTeamIds } }),
+      RoundTeam.deleteMany({ teamAccountId: account._id })
+    ]);
+    await TeamAccount.findByIdAndDelete(account._id);
+    await ActivityLog.create({
+      actor: req.user.username || 'Admin',
+      action: 'TEAM_ACCOUNT_DELETED',
+      teamId: account.loginId,
+      details: `Deleted ${account.loginId} and ${roundTeamIds.length} round assignment(s)`
+    });
+    res.json({ message: `${account.loginId} and its round data were deleted` });
+  } catch (error) {
+    console.error('Delete Team Account Error:', error);
+    res.status(500).json({ message: 'Failed to delete team account' });
   }
 });
 
