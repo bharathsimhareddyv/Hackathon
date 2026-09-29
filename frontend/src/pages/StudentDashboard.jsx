@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
+import { downloadProject } from '../utils/downloadProject';
 import StatusBadge from '../components/StatusBadge';
 import CountdownTimer from '../components/CountdownTimer';
 import Navbar from '../components/Navbar';
@@ -47,22 +48,10 @@ export default function StudentDashboard() {
     fetchDashboard();
   }, []);
 
-  const handleDownloadProject = async (projectId, projectName) => {
+  const handleDownloadProject = async (project) => {
     try {
       setDownloading(true);
-      const response = await api.get(`/projects/${projectId}/download`, {
-        responseType: 'blob'
-      });
-      
-      const blob = new Blob([response.data], { type: 'application/zip' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${projectName || 'Project'}.zip`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      await downloadProject(project, api);
 
       showToast('Project ZIP downloaded! Work locally on your system.', 'success');
     } catch (err) {
@@ -268,7 +257,7 @@ export default function StudentDashboard() {
 
                       {currentProject.filePath ? (
                         <button
-                          onClick={() => handleDownloadProject(currentProject._id, currentProject.name)}
+                          onClick={() => handleDownloadProject(currentProject)}
                           disabled={downloading}
                           className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 shrink-0 transition-all"
                         >

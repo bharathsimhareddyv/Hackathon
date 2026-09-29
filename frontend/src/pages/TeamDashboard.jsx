@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowDownToLine, ExternalLink, GitBranch, LogOut, Send, UploadCloud } from 'lucide-react';
 import api from '../utils/api';
+import { downloadProject } from '../utils/downloadProject';
 import { useAuth } from '../context/AuthContext';
 
 export default function TeamDashboard() {
@@ -49,15 +50,7 @@ export default function TeamDashboard() {
   const handleDownload = async (project) => {
     try {
       setDownloading(true);
-      const response = await api.get(`/projects/${project._id}/download`, { responseType: 'blob' });
-      const url = URL.createObjectURL(response.data);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = project.originalFileName || `${project.name}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      await downloadProject(project, api);
     } catch (err) {
       showToast(err.response?.data?.message || 'Download failed', 'error');
     } finally {
@@ -109,6 +102,7 @@ export default function TeamDashboard() {
             <label className="text-xs text-slate-400">Round<select value={roundNumber} onChange={event => setRoundNumber(event.target.value)} className="glass-input ml-2 rounded-lg px-3 py-2 text-sm text-white">{rounds.map(round => <option key={round._id} value={round.roundNumber}>Round {round.roundNumber}</option>)}</select></label>
           </div>
           {selectedRound && <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm"><div className="rounded-xl bg-slate-950/70 p-4"><span className="text-xs text-slate-500">Round status</span><p className="mt-1 font-semibold text-emerald-300">{selectedRound.status}</p></div><div className="rounded-xl bg-slate-950/70 p-4"><span className="text-xs text-slate-500">Submission deadline</span><p className="mt-1 font-semibold text-slate-200">{new Date(selectedRound.endAt).toLocaleString()}</p></div></div>}
+          {assignment && <div className="mt-4 rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-4"><p className="text-xs font-bold uppercase tracking-wider text-cyan-200">Arohan IDs assigned to this team</p>{assignment.participantIds?.length ? <div className="mt-3 flex flex-wrap gap-2">{assignment.participantIds.map(id => <span key={id} className="rounded-md border border-cyan-800 bg-slate-950 px-2.5 py-1.5 font-mono text-xs font-bold text-cyan-100">{id}</span>)}</div> : <p className="mt-2 text-sm text-slate-300">No Arohan IDs have been assigned yet. Please contact the organizer.</p>}</div>}
           {selectedRound?.instructions && <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectedRound.instructions}</p>}
           {selectedRound?.criteriaSummary && <p className="mt-3 rounded-lg border-l-2 border-amber-400 bg-amber-950/20 px-3 py-2 text-sm text-amber-100">{selectedRound.criteriaSummary}</p>}
           {selectedRound?.githubRepoUrl && <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-4"><p className="flex items-center gap-2 text-xs font-semibold text-slate-300"><GitBranch className="h-4 w-4 text-emerald-300" /> Repository</p><a href={selectedRound.githubRepoUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-2 break-all text-sm text-emerald-300 hover:underline">{selectedRound.githubRepoUrl}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a><code className="mt-3 block overflow-x-auto rounded-lg bg-black/40 p-3 text-xs text-slate-300">git clone {selectedRound.githubRepoUrl}</code></div>}

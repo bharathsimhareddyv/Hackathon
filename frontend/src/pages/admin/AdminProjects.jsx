@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { downloadProject } from '../../utils/downloadProject';
 import { useAuth } from '../../context/AuthContext';
 import { FolderGit2, UploadCloud, Trash2, FileCode2, Download } from 'lucide-react';
 
@@ -101,15 +102,7 @@ export default function AdminProjects() {
   const handleDownloadProject = async (project) => {
     try {
       setDownloadingId(project._id);
-      const response = await api.get(`/projects/${project._id}/download`, { responseType: 'blob' });
-      const url = URL.createObjectURL(response.data);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = project.originalFileName || `${project.name}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      await downloadProject(project, api);
     } catch (err) {
       showToast(err.response?.data?.message || 'Project download failed', 'error');
     } finally {

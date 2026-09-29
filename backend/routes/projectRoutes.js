@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const { Readable } = require('stream');
 const Project = require('../models/Project');
+const RoundTeam = require('../models/RoundTeam');
 const DownloadLog = require('../models/DownloadLog');
 const ActivityLog = require('../models/ActivityLog');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
@@ -17,8 +17,23 @@ router.get('/:id/download', protect, async (req, res) => {
     const project = await Project.findById(req.params.id);
     if (!project) return res.status(404).json({ message: 'Project not found' });
 
+    if (req.user.role === 'TEAM') {
+      const assignedTeam = await RoundTeam.exists({
+        roundNumber: project.roundNumber,
+        teamAccountId: req.user._id,
+        projectId: project._id
+      });
+      if (!assignedTeam) return res.status(403).json({ message: 'This project is not assigned to your team' });
+    }
+
     // Record download log if requested by student
     if (req.user.role === 'STUDENT') {
+      const assignedTeam = await RoundTeam.exists({
+        roundNumber: project.roundNumber,
+        participantIds: req.user.arohanId,
+        projectId: project._id
+      });
+      if (!assignedTeam) return res.status(403).json({ message: 'This project is not assigned to you' });
       await DownloadLog.create({
         participantId: req.user.arohanId,
         roundNumber: project.roundNumber,
@@ -29,17 +44,8 @@ router.get('/:id/download', protect, async (req, res) => {
 
     const downloadName = path.basename(project.originalFileName || `${project.name}.zip`);
 
-    // Proxy Cloudinary files so authenticated browser requests do not depend on cross-origin redirects.
     if (project.filePath && (project.filePath.startsWith('http://') || project.filePath.startsWith('https://'))) {
-      const upstream = await fetch(project.filePath);
-      if (!upstream.ok || !upstream.body) {
-        return res.status(502).json({ message: 'Cloudinary could not provide this project file' });
-      }
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename="${downloadName.replace(/["\\\r\n]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
-      const contentLength = upstream.headers.get('content-length');
-      if (contentLength) res.setHeader('Content-Length', contentLength);
-      return Readable.fromWeb(upstream.body).pipe(res);
+      return res.redirect(302, project.filePath);
     }
 
     if (!project.filePath || !fs.existsSync(project.filePath)) {
