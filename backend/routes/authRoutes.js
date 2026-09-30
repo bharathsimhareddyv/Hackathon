@@ -244,7 +244,7 @@ router.post('/admin-password-change/request-code', protect, async (req, res) => 
     const admin = await Admin.findById(req.user._id);
     if (!admin?.email) return res.status(400).json({ message: 'Your admin account needs an email address before changing its password' });
     if (!isEmailConfigured()) {
-      return res.status(503).json({ message: 'Configure RESEND_API_KEY and RESEND_FROM_EMAIL before requesting a verification code.' });
+      return res.status(503).json({ message: 'Configure Gmail API OAuth credentials and GMAIL_SENDER_EMAIL before requesting a verification code.' });
     }
     const targetEmail = admin.email.trim().toLowerCase();
     const code = crypto.randomInt(100000, 1000000).toString();
@@ -264,7 +264,8 @@ router.post('/admin-password-change/request-code', protect, async (req, res) => 
     res.json({ message: `Verification code sent to ${targetEmail}`, email: targetEmail });
   } catch (error) {
     console.error('Admin Password OTP Error:', error.code || 'unknown', error.statusCode || '');
-    res.status(error.code === 'RESEND_NOT_CONFIGURED' ? 503 : 502).json({ message: 'Could not send verification code through Resend. Check the API key and verified sender domain.' });
+    const status = error.code === 'GMAIL_NOT_CONFIGURED' ? 503 : error.code?.startsWith('GMAIL_') || error.code?.startsWith('GOOGLE_OAUTH_') ? 502 : 500;
+    res.status(status).json({ message: 'Could not send verification code through Gmail. Check the OAuth credentials and Gmail API access.' });
   }
 });
 

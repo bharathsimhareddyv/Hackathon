@@ -148,14 +148,16 @@ NODE_ENV=development
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
-RESEND_API_KEY=re_your_api_key
-RESEND_FROM_EMAIL=mail@your-verified-domain.com
+GMAIL_CLIENT_ID=your-oauth-client-id
+GMAIL_CLIENT_SECRET=your-oauth-client-secret
+GMAIL_REFRESH_TOKEN=your-oauth-refresh-token
+GMAIL_SENDER_EMAIL=your-gmail-address@gmail.com
 MAIL_FROM_NAME=AAROHAN Hackathon
 MAIL_REPLY_TO=your-inbox@gmail.com
 ADMIN_PASSWORD_OTP_EMAIL=bharathsimhareddyv19@gmail.com
 ```
 
-Cloudinary credentials are required for hosted project ZIPs, progress evidence, and the AAROHAN logo. Resend credentials are required for bulk team invitations and email-verified admin password changes. Verify your sending domain in Resend before using its address in `RESEND_FROM_EMAIL`. Do not commit real credentials to source control.
+Cloudinary credentials are required for hosted project ZIPs, progress evidence, and the AAROHAN logo. Gmail API OAuth credentials are required for bulk team invitations and email-verified admin password changes. Enable the Gmail API in Google Cloud, create an OAuth client, and generate a refresh token with the `https://www.googleapis.com/auth/gmail.send` scope. The OAuth consent screen must be configured for the sending account; refresh tokens for an External app left in Testing can expire after seven days. Set these values in the backend environment and never commit real credentials.
 
 Start backend server:
 ```bash

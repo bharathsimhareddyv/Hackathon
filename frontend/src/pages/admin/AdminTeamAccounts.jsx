@@ -223,7 +223,7 @@ export default function AdminTeamAccounts() {
 
     <section className="glass-panel rounded-2xl border border-cyan-800/60 p-5 sm:p-6">
       <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-cyan-300" /><h2 className="font-bold text-white">Welcome email format</h2></div>
-      <p className="mt-1 text-xs text-slate-400">Messages are sent through the Resend account configured on the backend. Placeholders: {'{{hackathonName}}'}, {'{{teamName}}'}, {'{{loginId}}'}, {'{{password}}'}.</p>
+      <p className="mt-1 text-xs text-slate-400">Messages are sent from the Gmail account connected to the backend. Placeholders: {'{{hackathonName}}'}, {'{{teamName}}'}, {'{{loginId}}'}, {'{{password}}'}.</p>
       <div className="mt-4 grid gap-4">
         <label className="text-xs text-slate-300">Subject<input value={welcomeSubject} maxLength={200} onChange={event => setWelcomeSubject(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
         <label className="text-xs text-slate-300">Message<textarea value={welcomeBody} maxLength={10000} rows={8} onChange={event => setWelcomeBody(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>

@@ -25,16 +25,16 @@ const {
 const Settings = require('../models/Settings');
 
 const emailProviderFailureResponse = error => {
-  if (error.code === 'RESEND_NOT_CONFIGURED') {
-    return { status: 503, message: 'Configure RESEND_API_KEY and RESEND_FROM_EMAIL on the backend before sending email.' };
+  if (error.code === 'GMAIL_NOT_CONFIGURED') {
+    return { status: 503, message: 'Configure Gmail API OAuth credentials and GMAIL_SENDER_EMAIL on the backend before sending email.' };
+  }
+  if (error.code === 'GOOGLE_OAUTH_ERROR') {
+    return { status: 502, message: 'Google rejected the OAuth refresh token. Check Gmail API credentials, consent, and the gmail.send scope.' };
   }
   if (error.statusCode === 401 || error.statusCode === 403) {
-    return { status: 502, message: 'Resend rejected the API key. Check RESEND_API_KEY in the backend environment.' };
+    return { status: 502, message: 'Gmail API access was denied. Check the OAuth account, gmail.send scope, and authorized sender address.' };
   }
-  if (error.statusCode === 400 || error.statusCode === 422) {
-    return { status: 502, message: 'Resend rejected the sender or email content. Check that RESEND_FROM_EMAIL uses a verified domain.' };
-  }
-  return { status: 502, message: 'Resend email delivery failed. Check the backend provider logs.' };
+  return { status: 502, message: 'Gmail API email delivery failed. Check the backend provider logs.' };
 };
 
 router.get('/assignments', protect, teamOnly, async (req, res) => {
@@ -343,7 +343,7 @@ router.delete('/:id', async (req, res) => {
 router.post('/send-test', async (req, res) => {
   try {
     if (!isEmailConfigured()) {
-      return res.status(503).json({ message: 'Configure RESEND_API_KEY and RESEND_FROM_EMAIL before testing email delivery' });
+      return res.status(503).json({ message: 'Configure Gmail API OAuth credentials and GMAIL_SENDER_EMAIL before testing email delivery' });
     }
     const to = String(req.body.to || '').trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
@@ -366,7 +366,7 @@ router.post('/send-test', async (req, res) => {
     const body = interpolateEmailTemplate(bodyTemplate, values);
 
     await sendMail({ to, subject: `[Test] ${subject}`, text: body, html: welcomeEmailHtml({ message: body, values: {} }) });
-    res.json({ message: `Email accepted by Resend for delivery to ${to}` });
+    res.json({ message: `Email accepted by Gmail for delivery to ${to}` });
   } catch (error) {
     console.error('Email Test Error:', error.code || 'unknown', error.statusCode || '');
     const failure = emailProviderFailureResponse(error);
@@ -377,7 +377,7 @@ router.post('/send-test', async (req, res) => {
 router.post('/send-welcome', async (req, res) => {
   try {
     if (!isEmailConfigured()) {
-      return res.status(503).json({ message: 'Configure RESEND_API_KEY and RESEND_FROM_EMAIL before sending welcome emails' });
+      return res.status(503).json({ message: 'Configure Gmail API OAuth credentials and GMAIL_SENDER_EMAIL before sending welcome emails' });
     }
     const { teamAccountIds, sendToAll } = req.body;
     let accounts = [];
@@ -427,7 +427,7 @@ router.post('/send-welcome', async (req, res) => {
     res.json({ message: `Welcome emails sent to ${sent} team(s); ${skipped} skipped without contact emails`, sent, skipped });
   } catch (error) {
     console.error('Send Welcome Error:', error.code || 'unknown', error.statusCode || '');
-    if (error.code?.startsWith('RESEND_') || error.statusCode) {
+    if (error.code?.startsWith('GMAIL_') || error.code?.startsWith('GOOGLE_OAUTH_') || error.statusCode) {
       const failure = emailProviderFailureResponse(error);
       return res.status(failure.status).json({ message: failure.message });
     }
@@ -439,7 +439,7 @@ router.post('/send-welcome', async (req, res) => {
 router.post('/send-bulk-status', async (req, res) => {
   try {
     if (!isEmailConfigured()) {
-      return res.status(503).json({ message: 'Configure RESEND_API_KEY and RESEND_FROM_EMAIL before sending status emails' });
+      return res.status(503).json({ message: 'Configure Gmail API OAuth credentials and GMAIL_SENDER_EMAIL before sending status emails' });
     }
     const { teamAccountIds, type, roundNumber, nextRound } = req.body;
     if (!type || !['qualified', 'eliminated'].includes(type)) {
@@ -468,7 +468,7 @@ router.post('/send-bulk-status', async (req, res) => {
     res.json({ message: `Sent ${sent} email(s)` });
   } catch (error) {
     console.error('Send Bulk Status Error:', error.code || 'unknown', error.statusCode || '');
-    if (error.code?.startsWith('RESEND_') || error.statusCode) {
+    if (error.code?.startsWith('GMAIL_') || error.code?.startsWith('GOOGLE_OAUTH_') || error.statusCode) {
       const failure = emailProviderFailureResponse(error);
       return res.status(failure.status).json({ message: failure.message });
     }
