@@ -8,7 +8,7 @@ const TeamAccount = require('../models/TeamAccount');
 const Terms = require('../models/Terms');
 const TermsAcceptance = require('../models/TermsAcceptance');
 const OtpToken = require('../models/OtpToken');
-const { sendMail } = require('../utils/emailService');
+const { isEmailConfigured, sendMail } = require('../utils/emailService');
 const crypto = require('crypto');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -243,6 +243,9 @@ router.post('/admin-password-change/request-code', protect, async (req, res) => 
     if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Admin access required' });
     const admin = await Admin.findById(req.user._id);
     if (!admin?.email) return res.status(400).json({ message: 'Your admin account needs an email address before changing its password' });
+    if (!isEmailConfigured()) {
+      return res.status(503).json({ message: 'Configure RESEND_API_KEY and RESEND_FROM_EMAIL before requesting a verification code.' });
+    }
     const targetEmail = admin.email.trim().toLowerCase();
     const code = crypto.randomInt(100000, 1000000).toString();
     await OtpToken.deleteMany({ email: targetEmail, purpose: 'ADMIN_PASSWORD_CHANGE' });
@@ -252,20 +255,16 @@ router.post('/admin-password-change/request-code', protect, async (req, res) => 
       purpose: 'ADMIN_PASSWORD_CHANGE',
       expiresAt: new Date(Date.now() + 10 * 60 * 1000)
     });
-    const delivery = await sendMail({
+    await sendMail({
       to: targetEmail,
       subject: 'AAROHAN admin password verification code',
       text: `Your AAROHAN admin password verification code is ${code}. It expires in 10 minutes.`,
       html: `<p>Your AAROHAN admin password verification code is <strong>${code}</strong>.</p><p>It expires in 10 minutes.</p>`
     });
-    if (delivery.skipped) {
-      await OtpToken.deleteMany({ email: targetEmail, purpose: 'ADMIN_PASSWORD_CHANGE' });
-      return res.status(503).json({ message: 'Email is not configured. Configure SMTP to request a verification code.' });
-    }
     res.json({ message: `Verification code sent to ${targetEmail}`, email: targetEmail });
   } catch (error) {
-    console.error('Admin Password OTP Error:', error);
-    res.status(500).json({ message: 'Could not send verification code' });
+    console.error('Admin Password OTP Error:', error.code || 'unknown', error.statusCode || '');
+    res.status(error.code === 'RESEND_NOT_CONFIGURED' ? 503 : 502).json({ message: 'Could not send verification code through Resend. Check the API key and verified sender domain.' });
   }
 });
 

@@ -148,13 +148,14 @@ NODE_ENV=development
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
-SMTP_SERVICE=gmail
-SMTP_USER=your_sender_address
-SMTP_PASS=your_email_app_password
+RESEND_API_KEY=re_your_api_key
+RESEND_FROM_EMAIL=mail@your-verified-domain.com
+MAIL_FROM_NAME=AAROHAN Hackathon
+MAIL_REPLY_TO=your-inbox@gmail.com
 ADMIN_PASSWORD_OTP_EMAIL=bharathsimhareddyv19@gmail.com
 ```
 
-Cloudinary credentials are required for hosted project ZIPs, progress evidence, and the AAROHAN logo. SMTP credentials are required for bulk team invitations and email-verified admin password changes. Do not commit real credentials to source control.
+Cloudinary credentials are required for hosted project ZIPs, progress evidence, and the AAROHAN logo. Resend credentials are required for bulk team invitations and email-verified admin password changes. Verify your sending domain in Resend before using its address in `RESEND_FROM_EMAIL`. Do not commit real credentials to source control.
 
 Start backend server:
 ```bash

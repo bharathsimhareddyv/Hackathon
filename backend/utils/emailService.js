@@ -1,5 +1,3 @@
-const nodemailer = require('nodemailer');
-
 const DEFAULT_WELCOME_EMAIL_SUBJECT = 'Welcome to {{hackathonName}}';
 const DEFAULT_WELCOME_EMAIL_BODY = `Welcome to {{hackathonName}}!
 
@@ -12,25 +10,17 @@ Log in on the hackathon portal to download your project or clone the repository.
 
 Good luck — Learn • Debug • Build • Innovate`;
 
-const getTransporter = () => {
-  const user = process.env.SMTP_USER || process.env.GMAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
-  if (!user || !pass) return null;
-
-  return nodemailer.createTransport({
-    service: process.env.SMTP_SERVICE || 'gmail',
-    auth: { user, pass }
-  });
+const getResendConfig = () => {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL;
+  if (!apiKey || !fromEmail) return null;
+  return {
+    apiKey,
+    from: `${process.env.MAIL_FROM_NAME || 'AAROHAN Hackathon'} <${fromEmail}>`
+  };
 };
 
-const isEmailConfigured = () => !!getTransporter();
-
-async function verifyEmailTransport() {
-  const transporter = getTransporter();
-  if (!transporter) return false;
-  await transporter.verify();
-  return true;
-}
+const isEmailConfigured = () => !!getResendConfig();
 
 function interpolateEmailTemplate(template, values) {
   return template.replace(/{{\s*(\w+)\s*}}/g, (placeholder, key) => (
@@ -47,22 +37,45 @@ function welcomeEmailHtml({ message, values }) {
 }
 
 async function sendMail({ to, subject, html, text }) {
-  const transporter = getTransporter();
-  if (!transporter) {
-    console.warn('[Email] SMTP not configured — skipped:', subject, '→', to);
-    return { skipped: true, message: 'Email not configured' };
+  const config = getResendConfig();
+  if (!config) {
+    const error = new Error('RESEND_API_KEY and RESEND_FROM_EMAIL are required');
+    error.code = 'RESEND_NOT_CONFIGURED';
+    throw error;
   }
 
-  const from = process.env.SMTP_USER || process.env.GMAIL_USER;
-  const fromName = process.env.MAIL_FROM_NAME || 'AAROHAN Hackathon';
-  const info = await transporter.sendMail({
-    from: `"${fromName}" <${from}>`,
-    to: Array.isArray(to) ? to.join(', ') : to,
-    subject,
-    html,
-    text: text || html.replace(/<[^>]+>/g, '')
-  });
-  return { skipped: false, messageId: info.messageId };
+  let response;
+  try {
+    response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: config.from,
+        ...(process.env.MAIL_REPLY_TO ? { reply_to: process.env.MAIL_REPLY_TO } : {}),
+        to: Array.isArray(to) ? to : [to],
+        subject,
+        html,
+        text: text || html.replace(/<[^>]+>/g, '')
+      })
+    });
+  } catch (cause) {
+    const error = new Error('Could not connect to the Resend email API');
+    error.code = 'RESEND_NETWORK_ERROR';
+    error.cause = cause;
+    throw error;
+  }
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(result.message || 'Resend rejected the email request');
+    error.code = result.name || 'RESEND_API_ERROR';
+    error.statusCode = response.status;
+    throw error;
+  }
+  return { skipped: false, messageId: result.id };
 }
 
 function welcomeHackathonHtml({ teamCode, loginId, password, hackathonName }) {
@@ -102,7 +115,6 @@ module.exports = {
   DEFAULT_WELCOME_EMAIL_SUBJECT,
   DEFAULT_WELCOME_EMAIL_BODY,
   isEmailConfigured,
-  verifyEmailTransport,
   interpolateEmailTemplate,
   welcomeEmailHtml,
   sendMail,
