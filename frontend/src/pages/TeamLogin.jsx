@@ -54,7 +54,6 @@ export default function TeamLogin() {
             {loading ? 'Signing in…' : 'Open team workspace'} <ArrowRight className="h-4 w-4" />
           </button>
         </form>
-        <p className="mt-6 border-t border-slate-800 pt-5 text-center text-xs text-slate-500">Organizer? <Link to="/admin-login" className="text-emerald-300 hover:text-emerald-200">Admin sign in</Link></p>
       </section>
     </main>
   );

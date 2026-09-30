@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Lock, User, ArrowRight, Sparkles } from 'lucide-react';
+import { Shield, Lock, User, ArrowRight } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
@@ -32,11 +32,6 @@ export default function AdminLogin() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleFillDemoAdmin = () => {
-    setUsername('admin');
-    setPassword('admin123');
   };
 
   return (
@@ -119,22 +114,6 @@ export default function AdminLogin() {
               )}
             </button>
           </form>
-
-          {/* Quick Demo Credentials Helper */}
-          <div className="mt-6 p-3.5 rounded-2xl bg-indigo-950/60 border border-indigo-500/30 flex items-center justify-between">
-            <div className="text-xs">
-              <span className="font-semibold text-indigo-300 block">Default Admin Login:</span>
-              <span className="text-slate-400 font-mono">admin / admin123</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleFillDemoAdmin}
-              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Auto-Fill</span>
-            </button>
-          </div>
 
           <div className="mt-8 pt-6 border-t border-slate-800 text-center">
             <Link
