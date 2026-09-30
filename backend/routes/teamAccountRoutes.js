@@ -12,7 +12,17 @@ const ActivityLog = require('../models/ActivityLog');
 const { protect, adminOnly, teamOnly } = require('../middleware/authMiddleware');
 const { generateRandomPassword } = require('../utils/passwordGenerator');
 const { nextAarohanTeamLoginId } = require('../utils/teamLoginId');
-const { isEmailConfigured, sendMail, welcomeHackathonHtml, qualifiedNextRoundHtml, eliminatedHtml } = require('../utils/emailService');
+const {
+  DEFAULT_WELCOME_EMAIL_SUBJECT,
+  DEFAULT_WELCOME_EMAIL_BODY,
+  isEmailConfigured,
+  verifyEmailTransport,
+  interpolateEmailTemplate,
+  welcomeEmailHtml,
+  sendMail,
+  qualifiedNextRoundHtml,
+  eliminatedHtml
+} = require('../utils/emailService');
 const Settings = require('../models/Settings');
 
 router.get('/assignments', protect, teamOnly, async (req, res) => {
@@ -318,6 +328,40 @@ router.delete('/:id', async (req, res) => {
 });
 
 // POST bulk welcome emails
+router.post('/send-test', async (req, res) => {
+  try {
+    if (!isEmailConfigured()) {
+      return res.status(503).json({ message: 'Configure SMTP_USER and SMTP_PASS before testing email delivery' });
+    }
+    const to = String(req.body.to || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      return res.status(400).json({ message: 'Enter a valid email address for the test message' });
+    }
+
+    const settings = await Settings.findOne() || {};
+    const subjectTemplate = String(req.body.subject ?? settings.welcomeEmailSubject ?? DEFAULT_WELCOME_EMAIL_SUBJECT).trim();
+    const bodyTemplate = String(req.body.body ?? settings.welcomeEmailBody ?? DEFAULT_WELCOME_EMAIL_BODY);
+    if (!subjectTemplate || subjectTemplate.length > 200 || !bodyTemplate.trim() || bodyTemplate.length > 10000) {
+      return res.status(400).json({ message: 'Email subject must be 1-200 characters and message 1-10000 characters' });
+    }
+    const values = {
+      hackathonName: settings.hackathonName || 'AAROHAN Hackathon',
+      teamName: 'Example team',
+      loginId: 'example-team',
+      password: 'example-password'
+    };
+    const subject = interpolateEmailTemplate(subjectTemplate, values);
+    const body = interpolateEmailTemplate(bodyTemplate, values);
+
+    await verifyEmailTransport();
+    await sendMail({ to, subject: `[Test] ${subject}`, text: body, html: welcomeEmailHtml({ message: body, values: {} }) });
+    res.json({ message: `SMTP verified and test email sent to ${to}` });
+  } catch (error) {
+    console.error('Email Test Error:', error.message);
+    res.status(502).json({ message: 'SMTP verification or test delivery failed. Check the backend SMTP settings and app password.' });
+  }
+});
+
 router.post('/send-welcome', async (req, res) => {
   try {
     if (!isEmailConfigured()) {
@@ -334,27 +378,41 @@ router.post('/send-welcome', async (req, res) => {
     }
 
     const settings = await Settings.findOne() || {};
+    const subjectTemplate = String(req.body.subject ?? settings.welcomeEmailSubject ?? DEFAULT_WELCOME_EMAIL_SUBJECT).trim();
+    const bodyTemplate = String(req.body.body ?? settings.welcomeEmailBody ?? DEFAULT_WELCOME_EMAIL_BODY);
+    if (!subjectTemplate || subjectTemplate.length > 200 || !bodyTemplate.trim() || bodyTemplate.length > 10000) {
+      return res.status(400).json({ message: 'Email subject must be 1-200 characters and message 1-10000 characters' });
+    }
+
     let sent = 0;
+    let skipped = 0;
     for (const acc of accounts) {
       const emails = acc.contactEmails.filter(Boolean);
-      if (emails.length === 0) continue;
+      if (emails.length === 0) {
+        skipped += 1;
+        continue;
+      }
       const pwd = acc.temporaryPasswordPlain || '(use admin reset to view)';
+      const values = {
+        hackathonName: settings.hackathonName || 'AAROHAN Hackathon',
+        teamName: acc.loginId,
+        loginId: acc.loginId,
+        password: pwd
+      };
+      const subject = interpolateEmailTemplate(subjectTemplate, values);
+      const body = interpolateEmailTemplate(bodyTemplate, values);
       await sendMail({
         to: emails,
-        subject: `Welcome to ${settings.hackathonName || 'AAROHAN Hackathon'}`,
-        html: welcomeHackathonHtml({
-          teamCode: acc.loginId,
-          loginId: acc.loginId,
-          password: pwd,
-          hackathonName: settings.hackathonName
-        })
+        subject,
+        text: body,
+        html: welcomeEmailHtml({ message: body, values: {} })
       });
       acc.welcomeEmailSentAt = new Date();
       await acc.save();
       sent += 1;
     }
 
-    res.json({ message: `Welcome emails processed for ${sent} team(s)` });
+    res.json({ message: `Welcome emails sent to ${sent} team(s); ${skipped} skipped without contact emails`, sent, skipped });
   } catch (error) {
     console.error('Send Welcome Error:', error);
     res.status(500).json({ message: 'Failed to send welcome emails' });

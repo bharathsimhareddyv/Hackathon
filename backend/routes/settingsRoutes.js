@@ -38,7 +38,7 @@ router.put('/', protect, adminOnly, async (req, res) => {
     let settings = await Settings.findOne();
     if (!settings) settings = new Settings({});
 
-    const fields = ['hackathonName', 'programName', 'logoUrl', 'description', 'contactInfo', 'leaderboardPublic', 'forceTermsAcceptance'];
+    const fields = ['hackathonName', 'programName', 'logoUrl', 'description', 'contactInfo', 'welcomeEmailSubject', 'welcomeEmailBody', 'leaderboardPublic', 'forceTermsAcceptance'];
     fields.forEach(f => {
       if (req.body[f] !== undefined) settings[f] = req.body[f];
     });

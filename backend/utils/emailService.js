@@ -1,5 +1,17 @@
 const nodemailer = require('nodemailer');
 
+const DEFAULT_WELCOME_EMAIL_SUBJECT = 'Welcome to {{hackathonName}}';
+const DEFAULT_WELCOME_EMAIL_BODY = `Welcome to {{hackathonName}}!
+
+Your team credentials:
+Team login: {{loginId}}
+Password: {{password}}
+Team name: {{teamName}}
+
+Log in on the hackathon portal to download your project or clone the repository.
+
+Good luck — Learn • Debug • Build • Innovate`;
+
 const getTransporter = () => {
   const user = process.env.SMTP_USER || process.env.GMAIL_USER;
   const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
@@ -13,6 +25,27 @@ const getTransporter = () => {
 
 const isEmailConfigured = () => !!getTransporter();
 
+async function verifyEmailTransport() {
+  const transporter = getTransporter();
+  if (!transporter) return false;
+  await transporter.verify();
+  return true;
+}
+
+function interpolateEmailTemplate(template, values) {
+  return template.replace(/{{\s*(\w+)\s*}}/g, (placeholder, key) => (
+    values[key] === undefined ? placeholder : String(values[key])
+  ));
+}
+
+function welcomeEmailHtml({ message, values }) {
+  const resolved = interpolateEmailTemplate(message, values);
+  const escaped = resolved.replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[character]);
+  return `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px;line-height:1.6;">${escaped.replace(/\r?\n/g, '<br>')}</div>`;
+}
+
 async function sendMail({ to, subject, html, text }) {
   const transporter = getTransporter();
   if (!transporter) {
@@ -20,9 +53,10 @@ async function sendMail({ to, subject, html, text }) {
     return { skipped: true, message: 'Email not configured' };
   }
 
-  const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'AAROHAN Hackathon';
+  const from = process.env.SMTP_USER || process.env.GMAIL_USER;
+  const fromName = process.env.MAIL_FROM_NAME || 'AAROHAN Hackathon';
   const info = await transporter.sendMail({
-    from: `"AAROHAN Hackathon" <${from}>`,
+    from: `"${fromName}" <${from}>`,
     to: Array.isArray(to) ? to.join(', ') : to,
     subject,
     html,
@@ -65,7 +99,12 @@ function eliminatedHtml({ teamCode, roundNumber }) {
 }
 
 module.exports = {
+  DEFAULT_WELCOME_EMAIL_SUBJECT,
+  DEFAULT_WELCOME_EMAIL_BODY,
   isEmailConfigured,
+  verifyEmailTransport,
+  interpolateEmailTemplate,
+  welcomeEmailHtml,
   sendMail,
   welcomeHackathonHtml,
   qualifiedNextRoundHtml,

@@ -3,6 +3,18 @@ import { Download, Eye, EyeOff, KeyRound, Lock, Mail, Plus, RefreshCw, Send, Tra
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 
+const DEFAULT_WELCOME_SUBJECT = 'Welcome to {{hackathonName}}';
+const DEFAULT_WELCOME_BODY = `Welcome to {{hackathonName}}!
+
+Your team credentials:
+Team login: {{loginId}}
+Password: {{password}}
+Team name: {{teamName}}
+
+Log in on the hackathon portal to download your project or clone the repository.
+
+Good luck — Learn • Debug • Build • Innovate`;
+
 export default function AdminTeamAccounts() {
   const { showToast } = useAuth();
   const [teams, setTeams] = useState([]);
@@ -17,13 +29,22 @@ export default function AdminTeamAccounts() {
   const [working, setWorking] = useState(false);
   const [emailDrafts, setEmailDrafts] = useState({});
   const [showPasswords, setShowPasswords] = useState(false);
+  const [welcomeSubject, setWelcomeSubject] = useState(DEFAULT_WELCOME_SUBJECT);
+  const [welcomeBody, setWelcomeBody] = useState(DEFAULT_WELCOME_BODY);
+  const [testEmail, setTestEmail] = useState('');
 
   const refresh = async () => {
     try {
-      const [teamRes, roundRes] = await Promise.all([api.get('/admin/team-accounts'), api.get('/rounds')]);
+      const [teamRes, roundRes, settingsRes] = await Promise.all([
+        api.get('/admin/team-accounts'),
+        api.get('/rounds'),
+        api.get('/settings')
+      ]);
       setTeams(teamRes.data);
       setRounds(roundRes.data);
       setEmailDrafts(Object.fromEntries(teamRes.data.map(team => [team._id, (team.contactEmails || []).join(', ')])));
+      setWelcomeSubject(settingsRes.data.welcomeEmailSubject || DEFAULT_WELCOME_SUBJECT);
+      setWelcomeBody(settingsRes.data.welcomeEmailBody || DEFAULT_WELCOME_BODY);
     } catch (err) {
       showToast(err.response?.data?.message || 'Could not load team accounts', 'error');
     } finally { setLoading(false); }
@@ -61,9 +82,35 @@ export default function AdminTeamAccounts() {
   const sendWelcome = async () => {
     try {
       setWorking(true);
-      const response = await api.post('/admin/team-accounts/send-welcome', { teamAccountIds: selected });
+      const response = await api.post('/admin/team-accounts/send-welcome', {
+        teamAccountIds: selected,
+        subject: welcomeSubject,
+        body: welcomeBody
+      });
       showToast(response.data.message, 'success');
     } catch (err) { showToast(err.response?.data?.message || 'Welcome emails failed', 'error'); }
+    finally { setWorking(false); }
+  };
+
+  const saveWelcomeTemplate = async () => {
+    try {
+      setWorking(true);
+      await api.put('/settings', { welcomeEmailSubject: welcomeSubject, welcomeEmailBody: welcomeBody });
+      showToast('Welcome email template saved', 'success');
+    } catch (err) { showToast(err.response?.data?.message || 'Could not save email template', 'error'); }
+    finally { setWorking(false); }
+  };
+
+  const sendTestEmail = async () => {
+    try {
+      setWorking(true);
+      const response = await api.post('/admin/team-accounts/send-test', {
+        to: testEmail,
+        subject: welcomeSubject,
+        body: welcomeBody
+      });
+      showToast(response.data.message, 'success');
+    } catch (err) { showToast(err.response?.data?.message || 'SMTP test failed', 'error'); }
     finally { setWorking(false); }
   };
 
@@ -173,6 +220,20 @@ export default function AdminTeamAccounts() {
     </div>
 
     {credentials.length > 0 && <section className="glass-panel rounded-2xl border border-amber-500/30 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="flex items-center gap-2 font-bold text-amber-100"><KeyRound className="h-4 w-4" /> Newly generated credentials</h2><p className="mt-1 text-xs text-amber-200/70">Download this batch as an Excel-compatible CSV for distribution.</p></div><button onClick={exportGeneratedCredentials} className="flex items-center gap-2 rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white hover:bg-amber-600"><Download className="h-4 w-4" />Download CSV</button></div><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{credentials.map(item => <div key={item.loginId} className="rounded-lg bg-slate-950/70 p-3 font-mono text-xs"><strong className="text-cyan-200">{item.loginId}</strong><p className="mt-1 text-slate-300">{item.password}</p></div>)}</div></section>}
+
+    <section className="glass-panel rounded-2xl border border-cyan-800/60 p-5 sm:p-6">
+      <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-cyan-300" /><h2 className="font-bold text-white">Welcome email format</h2></div>
+      <p className="mt-1 text-xs text-slate-400">Messages are sent through the SMTP mailbox configured on the backend. Placeholders: {'{{hackathonName}}'}, {'{{teamName}}'}, {'{{loginId}}'}, {'{{password}}'}.</p>
+      <div className="mt-4 grid gap-4">
+        <label className="text-xs text-slate-300">Subject<input value={welcomeSubject} maxLength={200} onChange={event => setWelcomeSubject(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
+        <label className="text-xs text-slate-300">Message<textarea value={welcomeBody} maxLength={10000} rows={8} onChange={event => setWelcomeBody(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
+      </div>
+      <div className="mt-4 flex flex-col gap-3 border-t border-slate-800 pt-4 sm:flex-row sm:items-end">
+        <label className="min-w-0 flex-1 text-xs text-slate-300">Send test to<input type="email" value={testEmail} onChange={event => setTestEmail(event.target.value)} placeholder="you@example.com" className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
+        <button onClick={saveWelcomeTemplate} disabled={working || !welcomeSubject.trim() || !welcomeBody.trim()} className="rounded-lg border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-200 disabled:opacity-40">Save format</button>
+        <button onClick={sendTestEmail} disabled={working || !testEmail.trim() || !welcomeSubject.trim() || !welcomeBody.trim()} className="flex items-center justify-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40"><Send className="h-4 w-4" />Verify and send test</button>
+      </div>
+    </section>
 
     <section className="glass-panel rounded-2xl border border-slate-800 p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4"><div><h2 className="font-bold text-white">Created accounts</h2><p className="mt-1 text-xs text-slate-500">{teams.length} teams · select teams to send messages or results</p></div><div className="flex flex-wrap gap-2"><button onClick={() => setShowPasswords(value => !value)} className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs font-bold text-slate-200">{showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}{showPasswords ? 'Hide passwords' : 'Show passwords'}</button><button onClick={exportAllCredentials} disabled={!teams.length} className="flex items-center gap-2 rounded-lg border border-amber-700 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-40"><Download className="h-4 w-4" />Excel-compatible CSV</button><button onClick={sendWelcome} disabled={!selected.length || working} className="flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"><Send className="h-4 w-4" />Welcome · {selected.length}</button><button onClick={() => sendStatusEmail('qualified')} disabled={!selected.length || working} className="rounded-lg border border-cyan-700 px-3 py-2 text-xs font-bold text-cyan-200 disabled:opacity-40">Qualified · {selected.length}</button><button onClick={() => sendStatusEmail('eliminated')} disabled={!selected.length || working} className="rounded-lg border border-rose-800 px-3 py-2 text-xs font-bold text-rose-200 disabled:opacity-40">Eliminated · {selected.length}</button></div></div>
