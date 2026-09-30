@@ -25,6 +25,13 @@ const {
 } = require('../utils/emailService');
 const Settings = require('../models/Settings');
 
+const smtpFailureResponse = error => {
+  if (error.code === 'EAUTH' || error.responseCode === 535) {
+    return { status: 502, message: 'SMTP authentication was rejected. Check SMTP_USER and SMTP_PASS; Gmail accounts usually require an app password.' };
+  }
+  return { status: 502, message: 'SMTP verification or delivery failed. Check the backend mail settings and provider logs.' };
+};
+
 router.get('/assignments', protect, teamOnly, async (req, res) => {
   try {
     const assignments = await RoundTeam.find({ teamAccountId: req.user._id })
@@ -357,8 +364,9 @@ router.post('/send-test', async (req, res) => {
     await sendMail({ to, subject: `[Test] ${subject}`, text: body, html: welcomeEmailHtml({ message: body, values: {} }) });
     res.json({ message: `SMTP verified and test email sent to ${to}` });
   } catch (error) {
-    console.error('Email Test Error:', error.message);
-    res.status(502).json({ message: 'SMTP verification or test delivery failed. Check the backend SMTP settings and app password.' });
+    console.error('Email Test Error:', error.code || 'unknown', error.responseCode || '');
+    const failure = smtpFailureResponse(error);
+    res.status(failure.status).json({ message: failure.message });
   }
 });
 
@@ -414,7 +422,11 @@ router.post('/send-welcome', async (req, res) => {
 
     res.json({ message: `Welcome emails sent to ${sent} team(s); ${skipped} skipped without contact emails`, sent, skipped });
   } catch (error) {
-    console.error('Send Welcome Error:', error);
+    console.error('Send Welcome Error:', error.code || 'unknown', error.responseCode || '');
+    if (error.code === 'EAUTH' || error.responseCode === 535) {
+      const failure = smtpFailureResponse(error);
+      return res.status(failure.status).json({ message: failure.message });
+    }
     res.status(500).json({ message: 'Failed to send welcome emails' });
   }
 });
