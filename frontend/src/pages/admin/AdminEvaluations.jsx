@@ -58,6 +58,7 @@ export default function AdminEvaluations() {
   // When team changes, prefill form with existing evaluation if available
   useEffect(() => {
     if (!selectedTeamId) return;
+    const roundMaxMarks = rounds.find(round => round.roundNumber === selectedRound)?.maxMarks ?? 100;
     const existing = evaluations.find(e => String(e.teamId?._id || e.teamId) === String(selectedTeamId));
 
     if (existing) {
@@ -68,7 +69,7 @@ export default function AdminEvaluations() {
       setJsSolved(existing.jsSolved || 0);
       setReactSolved(existing.reactSolved || 0);
       setMarks(existing.marks ?? '');
-      setMaxMarks(existing.maxMarks || 100);
+      setMaxMarks(roundMaxMarks);
       setRemarks(existing.remarks || '');
       setStatus(existing.status || 'PENDING');
     } else {
@@ -80,11 +81,11 @@ export default function AdminEvaluations() {
       setJsSolved(38);
       setReactSolved(32);
       setMarks('');
-      setMaxMarks(100);
+      setMaxMarks(roundMaxMarks);
       setRemarks('');
       setStatus('PENDING');
     }
-  }, [selectedTeamId, evaluations]);
+  }, [selectedTeamId, evaluations, rounds, selectedRound]);
 
   const handleSaveEvaluation = async (e) => {
     e.preventDefault();

@@ -62,6 +62,11 @@ router.post('/', async (req, res) => {
     if (!Number.isFinite(numericMarks) || !Number.isFinite(numericMaxMarks) || numericMaxMarks <= 0 || numericMarks < 0 || numericMarks > numericMaxMarks) {
       return res.status(400).json({ message: 'Marks must be between 0 and the maximum marks' });
     }
+    const round = await Round.findOne({ roundNumber: parseInt(roundNumber, 10) });
+    if (!round) return res.status(404).json({ message: 'Round not found' });
+    if (numericMaxMarks !== Number(round.maxMarks)) {
+      return res.status(400).json({ message: `Maximum marks for Round ${round.roundNumber} is ${round.maxMarks}` });
+    }
 
     const team = await RoundTeam.findById(teamId);
     if (!team) return res.status(404).json({ message: 'Team not found' });
@@ -100,7 +105,7 @@ router.post('/', async (req, res) => {
     evaluation.presentation = presentation !== undefined ? parseInt(presentation, 10) : evaluation.presentation;
 
     evaluation.marks = marks !== undefined ? parseFloat(marks) : evaluation.marks;
-    evaluation.maxMarks = maxMarks !== undefined ? parseFloat(maxMarks) : evaluation.maxMarks;
+    evaluation.maxMarks = round.maxMarks;
     evaluation.remarks = remarks !== undefined ? remarks : evaluation.remarks;
     if (status) evaluation.status = status;
 

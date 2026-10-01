@@ -7,6 +7,7 @@ const RoundTeam = require('../models/RoundTeam');
 const Round = require('../models/Round');
 const TeamAccount = require('../models/TeamAccount');
 const Evaluation = require('../models/Evaluation');
+const Participant = require('../models/Participant');
 const ActivityLog = require('../models/ActivityLog');
 const { protect, adminOnly, teamOnly } = require('../middleware/authMiddleware');
 const { uploadSubmission } = require('../middleware/uploadMiddleware');
@@ -159,29 +160,75 @@ router.get('/admin/:id/download', async (req, res) => {
   }
 });
 
+async function finalizeClaimReview(claim, req, status, marks, reason = '') {
+  const round = await Round.findOne({ roundNumber: claim.roundNumber });
+  if (!round) return { error: { status: 404, message: 'Round not found' } };
+
+  const numericMarks = Number(marks);
+  const maxMarks = Number(round.maxMarks);
+  if (marks === undefined || marks === null || String(marks).trim() === '' ||
+      !Number.isFinite(numericMarks) || !Number.isFinite(maxMarks) || maxMarks <= 0 || numericMarks < 0 || numericMarks > maxMarks) {
+    return { error: { status: 400, message: `Enter marks between 0 and ${maxMarks}` } };
+  }
+
+  const team = await RoundTeam.findById(claim.teamId);
+  if (!team) return { error: { status: 404, message: 'Team assignment not found' } };
+
+  let evaluation = await Evaluation.findOne({ roundNumber: claim.roundNumber, teamId: team._id });
+  if (!evaluation) {
+    evaluation = new Evaluation({
+      roundNumber: claim.roundNumber,
+      teamId: team._id,
+      teamCode: team.teamCode,
+      participantIds: team.participantIds || []
+    });
+  }
+  evaluation.marks = numericMarks;
+  evaluation.maxMarks = maxMarks;
+  evaluation.status = status;
+  evaluation.remarks = reason || (status === 'QUALIFIED' ? 'Approved by admin' : 'Not approved by admin');
+  evaluation.evaluatedBy = req.user.username || 'Admin';
+  evaluation.evaluatedAt = new Date();
+  await evaluation.save();
+
+  const participantStatus = `ROUND${claim.roundNumber}_${status}`;
+  const participantUpdate = { status: participantStatus };
+  if (status === 'QUALIFIED') participantUpdate.currentRound = claim.roundNumber + 1;
+  await Participant.updateMany(
+    { arohanId: { $in: team.participantIds || [] }, currentRound: { $lte: claim.roundNumber } },
+    { $set: participantUpdate }
+  );
+
+  claim.status = status === 'QUALIFIED' ? 'APPROVED' : 'REJECTED';
+  claim.reviewedBy = req.user.username || 'Admin';
+  claim.reviewedAt = new Date();
+  claim.rejectionReason = status === 'NOT_QUALIFIED' ? reason : '';
+  await claim.save();
+
+  await ActivityLog.create({
+    actor: req.user.username || 'Admin',
+    action: status === 'QUALIFIED' ? 'PROGRESS_APPROVED' : 'PROGRESS_REJECTED',
+    roundNumber: claim.roundNumber,
+    teamId: claim.teamCode,
+    oldValue: 'PENDING',
+    newValue: status,
+    details: `${status === 'QUALIFIED' ? 'Approved' : 'Rejected'} ${claim.teamCode}: ${numericMarks}/${maxMarks}${reason ? ` · ${reason}` : ''}`
+  });
+
+  return { claim, evaluation };
+}
+
 router.post('/admin/:id/approve', async (req, res) => {
   try {
     const claim = await ProgressClaim.findById(req.params.id);
     if (!claim) return res.status(404).json({ message: 'Claim not found' });
-    if (claim.status === 'APPROVED') {
-      return res.status(400).json({ message: 'Already approved' });
+    if (claim.status !== 'PENDING') {
+      return res.status(400).json({ message: 'This submission has already been reviewed' });
     }
 
-    claim.status = 'APPROVED';
-    claim.reviewedBy = req.user.username || 'Admin';
-    claim.reviewedAt = new Date();
-    claim.rejectionReason = '';
-    await claim.save();
-
-    await ActivityLog.create({
-      actor: req.user.username || 'Admin',
-      action: 'PROGRESS_APPROVED',
-      roundNumber: claim.roundNumber,
-      teamId: claim.teamCode,
-      details: `Approved submission for ${claim.teamCode}; marks remain pending manual evaluation`
-    });
-
-    res.json({ message: 'Submission approved; enter marks in Evaluations', claim });
+    const result = await finalizeClaimReview(claim, req, 'QUALIFIED', req.body.marks);
+    if (result.error) return res.status(result.error.status).json({ message: result.error.message });
+    res.json({ message: 'Submission approved and final marks recorded', ...result });
   } catch (error) {
     console.error('Approve Error:', error);
     res.status(500).json({ message: 'Failed to approve' });
@@ -190,25 +237,19 @@ router.post('/admin/:id/approve', async (req, res) => {
 
 router.post('/admin/:id/reject', async (req, res) => {
   try {
-    const { reason } = req.body;
+    const { reason, marks } = req.body;
     const claim = await ProgressClaim.findById(req.params.id);
     if (!claim) return res.status(404).json({ message: 'Claim not found' });
+    if (claim.status !== 'PENDING') {
+      return res.status(400).json({ message: 'This submission has already been reviewed' });
+    }
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({ message: 'A rejection reason is required' });
+    }
 
-    claim.status = 'REJECTED';
-    claim.reviewedBy = req.user.username || 'Admin';
-    claim.reviewedAt = new Date();
-    claim.rejectionReason = reason || 'Rejected by admin';
-    await claim.save();
-
-    await ActivityLog.create({
-      actor: req.user.username || 'Admin',
-      action: 'PROGRESS_REJECTED',
-      roundNumber: claim.roundNumber,
-      teamId: claim.teamCode,
-      details: claim.rejectionReason
-    });
-
-    res.json({ message: 'Progress rejected', claim });
+    const result = await finalizeClaimReview(claim, req, 'NOT_QUALIFIED', marks, String(reason).trim());
+    if (result.error) return res.status(result.error.status).json({ message: result.error.message });
+    res.json({ message: 'Submission rejected and final marks recorded', ...result });
   } catch (error) {
     res.status(500).json({ message: 'Failed to reject' });
   }
@@ -247,7 +288,7 @@ router.post('/admin/close-round/:roundNumber', async (req, res) => {
             maxMarks: round.maxMarks || 100,
             status: 'DISQUALIFIED'
           });
-        } else {
+        } else if (ev.status === 'PENDING') {
           ev.status = 'DISQUALIFIED';
         }
         await ev.save();

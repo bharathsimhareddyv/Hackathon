@@ -44,6 +44,15 @@ router.use(protect, adminOnly);
 router.post('/', async (req, res) => {
   try {
     const { roundNumber, name, type, description, instructions, startAt, endAt, maxMarks, qualificationCriteria, githubRepoUrl } = req.body;
+    const startDate = startAt ? new Date(startAt) : new Date();
+    const endDate = endAt ? new Date(endAt) : new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+    const configuredMaxMarks = Number(maxMarks ?? 100);
+    if (!Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime()) || endDate <= startDate) {
+      return res.status(400).json({ message: 'End time must be later than start time' });
+    }
+    if (!Number.isFinite(configuredMaxMarks) || configuredMaxMarks <= 0) {
+      return res.status(400).json({ message: 'Maximum marks must be greater than zero' });
+    }
     
     const existing = await Round.findOne({ roundNumber });
     if (existing) {
@@ -56,9 +65,9 @@ router.post('/', async (req, res) => {
       type,
       description,
       instructions,
-      startAt: startAt ? new Date(startAt) : new Date(),
-      endAt: endAt ? new Date(endAt) : new Date(Date.now() + 7200000),
-      maxMarks: maxMarks || 100,
+      startAt: startDate,
+      endAt: endDate,
+      maxMarks: configuredMaxMarks,
       qualificationCriteria: qualificationCriteria || { minErrorsSolved: 120, minPercentage: 60, minMarks: 60, ruleType: 'OR' },
       githubRepoUrl: githubRepoUrl || ''
     });
@@ -84,6 +93,16 @@ router.put('/:id', async (req, res) => {
   try {
     const round = await Round.findById(req.params.id);
     if (!round) return res.status(404).json({ message: 'Round not found' });
+
+    const nextStartAt = req.body.startAt !== undefined ? new Date(req.body.startAt) : round.startAt;
+    const nextEndAt = req.body.endAt !== undefined ? new Date(req.body.endAt) : round.endAt;
+    const nextMaxMarks = req.body.maxMarks !== undefined ? Number(req.body.maxMarks) : round.maxMarks;
+    if (!Number.isFinite(new Date(nextStartAt).getTime()) || !Number.isFinite(new Date(nextEndAt).getTime()) || new Date(nextEndAt) <= new Date(nextStartAt)) {
+      return res.status(400).json({ message: 'End time must be later than start time' });
+    }
+    if (!Number.isFinite(nextMaxMarks) || nextMaxMarks <= 0) {
+      return res.status(400).json({ message: 'Maximum marks must be greater than zero' });
+    }
 
     const fields = ['name', 'description', 'instructions', 'startAt', 'endAt', 'status', 'maxMarks', 'qualificationCriteria', 'githubRepoUrl', 'githubBranch', 'active'];
     
@@ -119,9 +138,14 @@ router.post('/:id/start', async (req, res) => {
     const round = await Round.findById(req.params.id);
     if (!round) return res.status(404).json({ message: 'Round not found' });
 
+    const now = new Date();
+    const previousDuration = round.endAt && round.startAt ? new Date(round.endAt) - new Date(round.startAt) : 0;
+    if (!round.endAt || new Date(round.endAt) <= now) {
+      round.endAt = new Date(now.getTime() + (previousDuration > 0 ? previousDuration : 2 * 60 * 60 * 1000));
+    }
     round.status = 'ACTIVE';
     round.active = true;
-    round.startAt = new Date();
+    round.startAt = now;
     await round.save();
 
     await ActivityLog.create({
@@ -196,6 +220,7 @@ router.post('/:id/reopen', async (req, res) => {
 
     round.status = 'ACTIVE';
     round.active = true;
+    round.startAt = now;
     round.endAt = new Date(Date.now() + minutesToExtend * 60 * 1000);
     await round.save();
 

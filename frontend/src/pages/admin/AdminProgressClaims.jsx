@@ -12,6 +12,7 @@ export default function AdminProgressClaims() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
+  const [reviewMarks, setReviewMarks] = useState({});
 
   const refresh = async () => {
     setLoading(true);
@@ -26,6 +27,12 @@ export default function AdminProgressClaims() {
   useEffect(() => { refresh(); }, [status, roundNumber, search]);
 
   const review = async (claim, action) => {
+    const maxMarks = Number(rounds.find(round => round.roundNumber === claim.roundNumber)?.maxMarks || 100);
+    const marks = Number(reviewMarks[claim._id]);
+    if (reviewMarks[claim._id] === undefined || reviewMarks[claim._id] === '' || !Number.isFinite(marks) || marks < 0 || marks > maxMarks) {
+      showToast(`Enter final marks between 0 and ${maxMarks}`, 'error');
+      return;
+    }
     let reason = '';
     if (action === 'reject') {
       reason = window.prompt('Reason for rejecting this claim?') || '';
@@ -33,8 +40,8 @@ export default function AdminProgressClaims() {
     }
     setBusyId(claim._id);
     try {
-      await api.post(`/progress-claims/admin/${claim._id}/${action}`, action === 'reject' ? { reason } : {});
-      showToast(action === 'approve' ? 'Submission approved. Enter marks in Evaluations.' : 'Claim rejected', 'success');
+      await api.post(`/progress-claims/admin/${claim._id}/${action}`, { marks, ...(reason ? { reason } : {}) });
+      showToast(action === 'approve' ? 'Approved with final marks for the leaderboard' : 'Rejected with final marks for the leaderboard', 'success');
       refresh();
     } catch (err) { showToast(err.response?.data?.message || 'Review action failed', 'error'); }
     finally { setBusyId(''); }
@@ -79,7 +86,7 @@ export default function AdminProgressClaims() {
   };
 
   return <div className="space-y-6">
-    <header><p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Organizer decisions</p><h1 className="mt-1 font-outfit text-3xl font-extrabold text-white">Progress approvals</h1><p className="mt-2 text-sm text-slate-400">Review each team submission. Approval does not assign marks; enter marks separately in Evaluations.</p></header>
+    <header><p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Organizer decisions</p><h1 className="mt-1 font-outfit text-3xl font-extrabold text-white">Progress approvals</h1><p className="mt-2 text-sm text-slate-400">Enter final marks, then approve or reject each submission. The decision and score update the leaderboard.</p></header>
     <section className="glass-panel rounded-2xl border border-slate-800 p-4 sm:p-6">
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_2fr_auto]">
         <label className="text-xs text-slate-400">Status<select value={status} onChange={event => setStatus(event.target.value)} className="glass-input mt-1 w-full rounded-lg px-3 py-2.5 text-sm text-white"><option value="PENDING">Pending</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select></label>
@@ -90,7 +97,7 @@ export default function AdminProgressClaims() {
       <div className="mt-5 divide-y divide-slate-800">{loading ? <p className="py-10 text-center text-sm text-slate-500">Loading claims…</p> : claims.length === 0 ? <p className="py-10 text-center text-sm text-slate-500">No claims match these filters.</p> : claims.map(claim => <article key={claim._id} className="grid gap-4 py-5 lg:grid-cols-[1fr_1fr_auto] lg:items-center">
         <div><p className="font-mono font-bold text-white">{claim.teamCode} <span className="font-sans font-normal text-slate-500">· Round {claim.roundNumber}</span></p><p className="mt-1 text-xs text-slate-400">Submitted {new Date(claim.submittedAt).toLocaleString()}</p><p className="mt-3 text-[11px] font-bold uppercase tracking-wider text-slate-500">Team notes</p><p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-300">{claim.notes || 'No notes provided.'}</p></div>
         <div><p className="text-2xl font-extrabold text-emerald-300">{claim.claimedPercentage == null ? 'Not provided' : `${claim.claimedPercentage}%`}</p><p className="text-xs text-slate-400">{claim.claimedErrorsSolved} errors marked solved</p>{(() => { const criteria = rounds.find(round => round.roundNumber === claim.roundNumber)?.qualificationCriteria; const minimum = criteria?.minPercentage ?? 0; const hasPercentage = claim.claimedPercentage != null; return <p className={`mt-1 text-xs ${!hasPercentage ? 'text-slate-400' : claim.claimedPercentage >= minimum ? 'text-emerald-300' : 'text-amber-300'}`}>{!hasPercentage ? 'No percentage supplied · manual review' : `Round criterion: ${minimum}% · ${claim.claimedPercentage >= minimum ? 'threshold met' : 'below threshold'}`}</p>; })()}<div className="mt-3 flex flex-wrap gap-3 text-xs">{claim.githubUrl && <a href={claim.githubUrl} target="_blank" rel="noreferrer" className="text-cyan-300 underline">Open GitHub repository</a>}{claim.zipPath && <button type="button" onClick={() => downloadEvidence(claim)} disabled={busyId === `download-${claim._id}`} className="inline-flex items-center gap-1 text-emerald-300 underline disabled:opacity-50"><Download className="h-3.5 w-3.5" />{busyId === `download-${claim._id}` ? 'Preparing ZIP…' : 'Download ZIP'}</button>}</div>{claim.rejectionReason && <p className="mt-2 text-xs text-rose-300">Reason: {claim.rejectionReason}</p>}</div>
-        {claim.status === 'PENDING' ? <div className="flex gap-2"><button disabled={busyId === claim._id} onClick={() => review(claim, 'approve')} className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-600 disabled:opacity-50"><Check className="h-4 w-4" />Approve</button><button disabled={busyId === claim._id} onClick={() => review(claim, 'reject')} className="flex items-center gap-1.5 rounded-lg border border-rose-800 px-3 py-2 text-xs font-bold text-rose-200 hover:bg-rose-950 disabled:opacity-50"><X className="h-4 w-4" />Reject</button></div> : <span className={`text-xs font-bold ${claim.status === 'APPROVED' ? 'text-emerald-300' : 'text-rose-300'}`}>{claim.status}</span>}
+        {claim.status === 'PENDING' ? <div className="space-y-2"><label className="block text-xs text-slate-400">Final marks / {rounds.find(round => round.roundNumber === claim.roundNumber)?.maxMarks || 100}<input type="number" min="0" max={rounds.find(round => round.roundNumber === claim.roundNumber)?.maxMarks || 100} step="any" value={reviewMarks[claim._id] ?? ''} onChange={event => setReviewMarks(previous => ({ ...previous, [claim._id]: event.target.value }))} className="glass-input mt-1 w-full rounded-lg px-3 py-2 text-sm text-white" /></label><div className="flex gap-2"><button disabled={busyId === claim._id} onClick={() => review(claim, 'approve')} className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-600 disabled:opacity-50"><Check className="h-4 w-4" />Approve</button><button disabled={busyId === claim._id} onClick={() => review(claim, 'reject')} className="flex items-center gap-1.5 rounded-lg border border-rose-800 px-3 py-2 text-xs font-bold text-rose-200 hover:bg-rose-950 disabled:opacity-50"><X className="h-4 w-4" />Reject</button></div></div> : <span className={`text-xs font-bold ${claim.status === 'APPROVED' ? 'text-emerald-300' : 'text-rose-300'}`}>{claim.status}</span>}
       </article>)}</div>
     </section>
   </div>;

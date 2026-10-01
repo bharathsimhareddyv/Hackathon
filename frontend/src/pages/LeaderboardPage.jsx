@@ -7,6 +7,7 @@ import { Trophy, Medal, Award, EyeOff, Search } from 'lucide-react';
 
 export default function LeaderboardPage() {
   const [leaderboard, setLeaderboard] = useState([]);
+  const [rounds, setRounds] = useState([]);
   const [isPublic, setIsPublic] = useState(true);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -16,6 +17,7 @@ export default function LeaderboardPage() {
       setLoading(true);
       const res = await api.get('/leaderboard');
       setIsPublic(res.data.public);
+      setRounds(res.data.rounds || []);
       setLeaderboard(res.data.leaderboard || []);
     } catch (err) {
       console.error('Fetch Leaderboard Error:', err);
@@ -49,7 +51,7 @@ export default function LeaderboardPage() {
             AAROHAN LEADERBOARD
           </h1>
           <p className="text-slate-400 text-sm mt-2">
-            Live evaluation rankings accumulated across Round 1, Round 2, and Round 3.
+            Live evaluation rankings accumulated across all configured rounds.
           </p>
         </div>
 
@@ -95,9 +97,7 @@ export default function LeaderboardPage() {
                       <th className="py-3.5 px-4 font-semibold">Rank</th>
                       <th className="py-3.5 px-4 font-semibold">Team Code</th>
                       <th className="py-3.5 px-4 font-semibold">Participants</th>
-                      <th className="py-3.5 px-4 font-semibold text-center">Round 1</th>
-                      <th className="py-3.5 px-4 font-semibold text-center">Round 2</th>
-                      <th className="py-3.5 px-4 font-semibold text-center">Round 3</th>
+                      {rounds.map(round => <th key={round._id} className="py-3.5 px-4 text-center font-semibold">Round {round.roundNumber}<span className="mt-1 block normal-case text-slate-500">/ {round.maxMarks}</span></th>)}
                       <th className="py-3.5 px-4 font-semibold text-right">Total Marks</th>
                       <th className="py-3.5 px-4 font-semibold text-center">Status</th>
                     </tr>
@@ -137,20 +137,13 @@ export default function LeaderboardPage() {
                           </div>
                         </td>
 
-                        <td className="py-4 px-4 text-center font-mono font-semibold text-cyan-300">
-                          {item.round1Marks}
-                        </td>
-
-                        <td className="py-4 px-4 text-center font-mono font-semibold text-indigo-300">
-                          {item.round2Marks}
-                        </td>
-
-                        <td className="py-4 px-4 text-center font-mono font-semibold text-emerald-300">
-                          {item.round3Marks}
-                        </td>
+                        {rounds.map(round => {
+                          const score = item.roundScores?.[round.roundNumber];
+                          return <td key={round._id} className="py-4 px-4 text-center font-mono font-semibold text-cyan-300">{score ? `${score.marks} / ${score.maxMarks}` : '—'}</td>;
+                        })}
 
                         <td className="py-4 px-4 text-right font-mono font-extrabold text-amber-400 text-sm">
-                          {item.totalMarks}
+                          {item.totalMarks} / {item.totalMaxMarks}
                         </td>
 
                         <td className="py-4 px-4 text-center">

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Evaluation = require('../models/Evaluation');
-const RoundTeam = require('../models/RoundTeam');
+const Round = require('../models/Round');
 const Settings = require('../models/Settings');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -15,41 +15,60 @@ router.get('/', async (req, res) => {
       return res.json({ public: false, leaderboard: [], message: 'Leaderboard is currently hidden by Admin.' });
     }
 
-    const evaluations = await Evaluation.find().populate('teamId');
+    const [evaluations, rounds] = await Promise.all([
+      Evaluation.find().populate('teamId'),
+      Round.find().select('roundNumber name maxMarks').sort({ roundNumber: 1 })
+    ]);
 
     // Aggregate by participant or team across rounds
     // Map of teamCode/participant list -> scores
     const leaderboardMap = {};
 
     evaluations.forEach(ev => {
-      const key = ev.teamCode || ev.teamId;
+      const participants = [...new Set(ev.participantIds || [])].sort();
+      const key = participants.length ? participants.join('|') : (ev.teamCode || String(ev.teamId?._id || ev.teamId));
       if (!leaderboardMap[key]) {
         leaderboardMap[key] = {
           teamCode: ev.teamCode,
-          participants: ev.participantIds || [],
+          participants,
+          roundScores: {},
           round1Marks: 0,
           round2Marks: 0,
           round3Marks: 0,
           totalMarks: 0,
+          totalMaxMarks: 0,
           round1Status: 'NOT_EVALUATED',
           round2Status: 'NOT_EVALUATED',
           round3Status: 'NOT_EVALUATED',
-          finalStatus: ev.status
+          finalStatus: ev.status,
+          latestRound: 0
         };
       }
 
+      const item = leaderboardMap[key];
+      item.roundScores[ev.roundNumber] = {
+        marks: ev.marks,
+        maxMarks: ev.maxMarks,
+        status: ev.status
+      };
+      if (ev.roundNumber >= item.latestRound) {
+        item.latestRound = ev.roundNumber;
+        item.teamCode = ev.teamCode;
+        item.finalStatus = ev.status;
+      }
       if (ev.roundNumber === 1) {
-        leaderboardMap[key].round1Marks = ev.marks;
-        leaderboardMap[key].round1Status = ev.status;
+        item.round1Marks = ev.marks;
+        item.round1Status = ev.status;
       } else if (ev.roundNumber === 2) {
-        leaderboardMap[key].round2Marks = ev.marks;
-        leaderboardMap[key].round2Status = ev.status;
+        item.round2Marks = ev.marks;
+        item.round2Status = ev.status;
       } else if (ev.roundNumber === 3) {
-        leaderboardMap[key].round3Marks = ev.marks;
-        leaderboardMap[key].round3Status = ev.status;
+        item.round3Marks = ev.marks;
+        item.round3Status = ev.status;
       }
 
-      leaderboardMap[key].totalMarks = (leaderboardMap[key].round1Marks || 0) + (leaderboardMap[key].round2Marks || 0) + (leaderboardMap[key].round3Marks || 0);
+      item.totalMarks = Object.values(item.roundScores).reduce((total, score) => total + (Number(score.marks) || 0), 0);
+      item.totalMaxMarks = Object.values(item.roundScores).reduce((total, score) => total + (Number(score.maxMarks) || 0), 0);
     });
 
     const leaderboardList = Object.values(leaderboardMap)
@@ -61,6 +80,7 @@ router.get('/', async (req, res) => {
 
     res.json({
       public: settings.leaderboardPublic,
+      rounds,
       leaderboard: leaderboardList
     });
   } catch (error) {

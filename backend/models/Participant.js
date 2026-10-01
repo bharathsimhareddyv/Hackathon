@@ -14,25 +14,13 @@ const ParticipantSchema = new mongoose.Schema({
   currentRound: { type: Number, default: 1 },
   status: {
     type: String,
-    enum: [
-      'REGISTERED',
-      'TERMS_PENDING',
-      'READY',
-      'ROUND1_ACTIVE',
-      'ROUND1_EVALUATION',
-      'ROUND1_QUALIFIED',
-      'ROUND1_NOT_QUALIFIED',
-      'ROUND2_ACTIVE',
-      'ROUND2_EVALUATION',
-      'ROUND2_QUALIFIED',
-      'ROUND2_NOT_QUALIFIED',
-      'ROUND3_ACTIVE',
-      'ROUND3_SUBMITTED',
-      'FINAL_EVALUATION',
-      'COMPLETED',
-      'DISQUALIFIED'
-    ],
-    default: 'REGISTERED'
+    default: 'REGISTERED',
+    validate: {
+      validator: value => [
+        'REGISTERED', 'TERMS_PENDING', 'READY', 'FINAL_EVALUATION', 'COMPLETED', 'DISQUALIFIED'
+      ].includes(value) || /^ROUND\d+_(ACTIVE|EVALUATION|QUALIFIED|NOT_QUALIFIED|SUBMITTED)$/.test(value),
+      message: props => `${props.value} is not a valid participant status`
+    }
   }
 }, { timestamps: true });
 
