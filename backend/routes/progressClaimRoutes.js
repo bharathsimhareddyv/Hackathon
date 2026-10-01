@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
+const path = require('path');
 const ProgressClaim = require('../models/ProgressClaim');
 const RoundTeam = require('../models/RoundTeam');
 const Round = require('../models/Round');
@@ -9,7 +10,7 @@ const Evaluation = require('../models/Evaluation');
 const ActivityLog = require('../models/ActivityLog');
 const { protect, adminOnly, teamOnly } = require('../middleware/authMiddleware');
 const { uploadSubmission } = require('../middleware/uploadMiddleware');
-const { isCloudinaryConfigured, uploadToCloudinary } = require('../config/cloudinary');
+const { isCloudinaryConfigured, uploadToCloudinary, createRawDownloadUrl } = require('../config/cloudinary');
 
 // Team: submit progress claim (manual admin approval required)
 router.post('/', protect, teamOnly, uploadSubmission.single('proofZip'), async (req, res) => {
@@ -43,6 +44,18 @@ router.post('/', protect, teamOnly, uploadSubmission.single('proofZip'), async (
       return res.status(403).json({ message: `No team assignment for Round ${rNum}` });
     }
 
+    const existingClaim = await ProgressClaim.findOne({ roundNumber: rNum, teamId: team._id });
+    if (existingClaim) {
+      if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(409).json({ message: `Your Round ${rNum} submission is already recorded and cannot be submitted again` });
+    }
+
+    const cleanGithubUrl = String(githubUrl || '').trim();
+    const cleanNotes = String(notes || '').trim();
+    if (!cleanGithubUrl && !req.file && !cleanNotes) {
+      return res.status(400).json({ message: 'Provide a GitHub URL, ZIP file, or notes before submitting' });
+    }
+
     let zipPath = '';
     let zipOriginalName = '';
     if (req.file) {
@@ -62,8 +75,8 @@ router.post('/', protect, teamOnly, uploadSubmission.single('proofZip'), async (
       teamCode: team.teamCode,
       claimedPercentage: pct,
       claimedErrorsSolved: parseInt(claimedErrorsSolved, 10) || 0,
-      githubUrl: String(githubUrl || '').trim(),
-      notes: notes || '',
+      githubUrl: cleanGithubUrl,
+      notes: cleanNotes,
       zipPath,
       zipOriginalName,
       status: 'PENDING'
@@ -119,6 +132,30 @@ router.get('/admin', async (req, res) => {
   }
 });
 
+router.get('/admin/:id/download', async (req, res) => {
+  try {
+    const claim = await ProgressClaim.findById(req.params.id);
+    if (!claim) return res.status(404).json({ message: 'Submission not found' });
+    if (!claim.zipPath) return res.status(404).json({ message: 'This submission has no ZIP file' });
+
+    const fileName = path.basename(claim.zipOriginalName || `${claim.teamCode}-round-${claim.roundNumber}.zip`);
+    if (/^https?:\/\//i.test(claim.zipPath)) {
+      return res.json({ downloadUrl: createRawDownloadUrl(claim.zipPath), fileName });
+    }
+
+    const submissionsDirectory = path.resolve(__dirname, '..', 'uploads', 'submissions');
+    const localPath = path.resolve(claim.zipPath);
+    if (!localPath.startsWith(`${submissionsDirectory}${path.sep}`) || !fs.existsSync(localPath)) {
+      return res.status(404).json({ message: 'Submission ZIP was not found on the server' });
+    }
+
+    return res.download(localPath, fileName);
+  } catch (error) {
+    console.error('Download Progress Evidence Error:', error);
+    res.status(502).json({ message: 'Could not create a download for this submission ZIP' });
+  }
+});
+
 router.post('/admin/:id/approve', async (req, res) => {
   try {
     const claim = await ProgressClaim.findById(req.params.id);
@@ -127,55 +164,21 @@ router.post('/admin/:id/approve', async (req, res) => {
       return res.status(400).json({ message: 'Already approved' });
     }
 
-    const round = await Round.findOne({ roundNumber: claim.roundNumber });
-    const requiredPercentage = round?.qualificationCriteria?.minPercentage ?? round?.requiredMinPercentage ?? 0;
-    if (claim.claimedPercentage !== null && claim.claimedPercentage !== undefined && claim.claimedPercentage < requiredPercentage) {
-      return res.status(400).json({ message: `Claim is below the round requirement of ${requiredPercentage}%` });
-    }
-
     claim.status = 'APPROVED';
     claim.reviewedBy = req.user.username || 'Admin';
     claim.reviewedAt = new Date();
     claim.rejectionReason = '';
     await claim.save();
 
-    let evaluation = null;
-    if (claim.claimedPercentage !== null && claim.claimedPercentage !== undefined) {
-      const team = await RoundTeam.findById(claim.teamId);
-      evaluation = await Evaluation.findOne({ roundNumber: claim.roundNumber, teamId: claim.teamId });
-      if (!evaluation && team) {
-        evaluation = new Evaluation({
-          roundNumber: claim.roundNumber,
-          teamId: team._id,
-          teamCode: team.teamCode,
-          participantIds: team.participantIds || [],
-          marks: 0,
-          maxMarks: round?.maxMarks || 100
-        });
-      }
-      if (evaluation) {
-        const totalErrors = evaluation.totalErrors || 200;
-        evaluation.errorsSolved = claim.claimedErrorsSolved || Math.round((claim.claimedPercentage / 100) * totalErrors);
-        evaluation.marks = Math.round((claim.claimedPercentage / 100) * (round?.maxMarks || evaluation.maxMarks || 100));
-        evaluation.maxMarks = round?.maxMarks || evaluation.maxMarks || 100;
-        evaluation.remarks = `Approved progress: ${claim.claimedPercentage}%`;
-        evaluation.evaluatedBy = req.user.username || 'Admin';
-        evaluation.evaluatedAt = new Date();
-        await evaluation.save();
-      }
-    }
-
     await ActivityLog.create({
       actor: req.user.username || 'Admin',
       action: 'PROGRESS_APPROVED',
       roundNumber: claim.roundNumber,
       teamId: claim.teamCode,
-      details: claim.claimedPercentage === null || claim.claimedPercentage === undefined
-        ? `Approved progress update without a percentage for ${claim.teamCode}`
-        : `Approved ${claim.claimedPercentage}% for ${claim.teamCode}`
+      details: `Approved submission for ${claim.teamCode}; marks remain pending manual evaluation`
     });
 
-    res.json({ message: 'Progress approved', claim, evaluation });
+    res.json({ message: 'Submission approved; enter marks in Evaluations', claim });
   } catch (error) {
     console.error('Approve Error:', error);
     res.status(500).json({ message: 'Failed to approve' });

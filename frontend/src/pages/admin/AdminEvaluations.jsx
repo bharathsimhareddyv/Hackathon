@@ -20,10 +20,10 @@ export default function AdminEvaluations() {
   const [jsSolved, setJsSolved] = useState(38);
   const [reactSolved, setReactSolved] = useState(32);
 
-  const [marks, setMarks] = useState(82);
+  const [marks, setMarks] = useState('');
   const [maxMarks, setMaxMarks] = useState(100);
-  const [remarks, setRemarks] = useState('Excellent performance in debugging tasks.');
-  const [status, setStatus] = useState('QUALIFIED');
+  const [remarks, setRemarks] = useState('');
+  const [status, setStatus] = useState('PENDING');
   const [saving, setSaving] = useState(false);
 
   const { showToast } = useAuth();
@@ -67,7 +67,7 @@ export default function AdminEvaluations() {
       setCssSolved(existing.cssSolved || 0);
       setJsSolved(existing.jsSolved || 0);
       setReactSolved(existing.reactSolved || 0);
-      setMarks(existing.marks || 0);
+      setMarks(existing.marks ?? '');
       setMaxMarks(existing.maxMarks || 100);
       setRemarks(existing.remarks || '');
       setStatus(existing.status || 'PENDING');
@@ -79,10 +79,10 @@ export default function AdminEvaluations() {
       setCssSolved(32);
       setJsSolved(38);
       setReactSolved(32);
-      setMarks(82);
+      setMarks('');
       setMaxMarks(100);
       setRemarks('');
-      setStatus('QUALIFIED');
+      setStatus('PENDING');
     }
   }, [selectedTeamId, evaluations]);
 
@@ -269,6 +269,9 @@ export default function AdminEvaluations() {
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Awarded Marks</label>
                   <input
                     type="number"
+                    min="0"
+                    max={maxMarks}
+                    step="any"
                     value={marks}
                     onChange={(e) => setMarks(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl glass-input text-sm font-mono font-bold text-emerald-400"

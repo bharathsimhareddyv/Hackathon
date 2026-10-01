@@ -12,6 +12,8 @@ const TeamAccountSchema = new mongoose.Schema({
   temporaryPasswordPlain: { type: String, default: null },
   memberNames: [{ type: String, trim: true }],
   contactEmails: [{ type: String, trim: true, lowercase: true }],
+  termsAccepted: { type: Boolean, default: false },
+  termsVersionAccepted: { type: String, default: null },
   currentRound: { type: Number, default: 1 },
   status: {
     type: String,

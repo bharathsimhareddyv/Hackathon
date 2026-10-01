@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Eye, EyeOff, KeyRound, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../utils/api';
 
 export default function TeamLogin() {
   const [loginId, setLoginId] = useState('');
@@ -9,15 +10,25 @@ export default function TeamLogin() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [terms, setTerms] = useState(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsLoading, setTermsLoading] = useState(true);
   const { teamLogin } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api.get('/terms/current')
+      .then(response => setTerms(response.data))
+      .catch(() => setError('Could not load the current Terms & Conditions. Please try again.'))
+      .finally(() => setTermsLoading(false));
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await teamLogin(loginId, password);
+      await teamLogin(loginId, password, termsAccepted);
       navigate('/team/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to sign in with those team credentials.');
@@ -40,6 +51,14 @@ export default function TeamLogin() {
         </div>
         {error && <p role="alert" className="mb-5 rounded-xl border border-rose-700 bg-rose-950/50 p-3 text-sm text-rose-200">{error}</p>}
         <form onSubmit={handleSubmit} className="space-y-4">
+          <section className="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+            <h2 className="text-sm font-bold text-white">Terms & Conditions <span className="text-xs font-normal text-slate-400">{terms ? `Version ${terms.version}` : ''}</span></h2>
+            <div className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs leading-5 text-slate-300">{termsLoading ? 'Loading terms…' : terms?.content || 'No current terms are available.'}</div>
+            <label className="mt-4 flex cursor-pointer items-start gap-2 text-xs leading-5 text-slate-200">
+              <input type="checkbox" checked={termsAccepted} onChange={event => setTermsAccepted(event.target.checked)} disabled={termsLoading || !terms} className="mt-1 accent-emerald-500" />
+              <span>I have read and agree to the current Terms & Conditions for all Arohan IDs assigned to this team.</span>
+            </label>
+          </section>
           <label className="block text-xs font-semibold text-slate-300">Team login ID
             <input value={loginId} onChange={event => setLoginId(event.target.value)} autoComplete="username" required placeholder="aarohan-team1" className="glass-input mt-2 w-full rounded-xl px-4 py-3 text-sm" />
           </label>
@@ -50,7 +69,7 @@ export default function TeamLogin() {
               <button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'} title={showPassword ? 'Hide password' : 'Show password'} className="absolute right-3 top-3 text-slate-400 hover:text-white">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
             </span>
           </label>
-          <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50">
+          <button disabled={loading || termsLoading || !termsAccepted} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-50">
             {loading ? 'Signing in…' : 'Open team workspace'} <ArrowRight className="h-4 w-4" />
           </button>
         </form>

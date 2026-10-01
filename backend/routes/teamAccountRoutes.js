@@ -8,6 +8,8 @@ const ProgressClaim = require('../models/ProgressClaim');
 const Evaluation = require('../models/Evaluation');
 const Submission = require('../models/Submission');
 const Round = require('../models/Round');
+const Terms = require('../models/Terms');
+const TermsAcceptance = require('../models/TermsAcceptance');
 const ActivityLog = require('../models/ActivityLog');
 const { protect, adminOnly, teamOnly } = require('../middleware/authMiddleware');
 const { generateRandomPassword } = require('../utils/passwordGenerator');
@@ -25,16 +27,10 @@ const {
 const Settings = require('../models/Settings');
 
 const emailProviderFailureResponse = error => {
-  if (error.code === 'GMAIL_NOT_CONFIGURED') {
-    return { status: 503, message: 'Configure Gmail API OAuth credentials and GMAIL_SENDER_EMAIL on the backend before sending email.' };
+  if (error.code === 'SMTP_NOT_CONFIGURED') {
+    return { status: 503, message: 'Configure SMTP_SERVICE, SMTP_USER, and SMTP_PASS on the backend before sending email.' };
   }
-  if (error.code === 'GOOGLE_OAUTH_ERROR') {
-    return { status: 502, message: 'Google rejected the OAuth refresh token. Check Gmail API credentials, consent, and the gmail.send scope.' };
-  }
-  if (error.statusCode === 401 || error.statusCode === 403) {
-    return { status: 502, message: 'Gmail API access was denied. Check the OAuth account, gmail.send scope, and authorized sender address.' };
-  }
-  return { status: 502, message: 'Gmail API email delivery failed. Check the backend provider logs.' };
+  return { status: 502, message: 'SMTP email delivery failed. Check the SMTP service and backend logs.' };
 };
 
 router.get('/assignments', protect, teamOnly, async (req, res) => {
@@ -259,6 +255,30 @@ router.post('/:id/assign-participants', async (req, res) => {
     account.memberNames = roundTeam.memberNames;
     await account.save();
 
+    const currentTerms = await Terms.findOne({ isCurrent: true });
+    if (currentTerms && account.termsAccepted && account.termsVersionAccepted === currentTerms.version) {
+      const acceptedAt = new Date();
+      await Promise.all(cleanIds.map(participantId => TermsAcceptance.updateOne(
+        { participantId, termsVersion: currentTerms.version },
+        { $setOnInsert: {
+          participantId,
+          termsVersion: currentTerms.version,
+          acceptedAt,
+          ipAddress: req.ip || req.connection.remoteAddress,
+          userAgent: req.headers['user-agent'] || ''
+        } },
+        { upsert: true }
+      )));
+      await Participant.updateMany(
+        { arohanId: { $in: cleanIds } },
+        { $set: { termsAccepted: true, termsVersionAccepted: currentTerms.version } }
+      );
+      await Participant.updateMany(
+        { arohanId: { $in: cleanIds }, status: { $in: ['REGISTERED', 'TERMS_PENDING'] } },
+        { $set: { status: 'READY' } }
+      );
+    }
+
     await ActivityLog.create({
       actor: req.user.username || 'Admin',
       action: 'TEAM_PARTICIPANTS_ASSIGNED',
@@ -343,7 +363,7 @@ router.delete('/:id', async (req, res) => {
 router.post('/send-test', async (req, res) => {
   try {
     if (!isEmailConfigured()) {
-      return res.status(503).json({ message: 'Configure Gmail API OAuth credentials and GMAIL_SENDER_EMAIL before testing email delivery' });
+      return res.status(503).json({ message: 'Configure SMTP_SERVICE, SMTP_USER, and SMTP_PASS before testing email delivery' });
     }
     const to = String(req.body.to || '').trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
@@ -366,7 +386,7 @@ router.post('/send-test', async (req, res) => {
     const body = interpolateEmailTemplate(bodyTemplate, values);
 
     await sendMail({ to, subject: `[Test] ${subject}`, text: body, html: welcomeEmailHtml({ message: body, values: {} }) });
-    res.json({ message: `Email accepted by Gmail for delivery to ${to}` });
+    res.json({ message: `Email accepted by SMTP for delivery to ${to}` });
   } catch (error) {
     console.error('Email Test Error:', error.code || 'unknown', error.statusCode || '');
     const failure = emailProviderFailureResponse(error);
@@ -377,7 +397,7 @@ router.post('/send-test', async (req, res) => {
 router.post('/send-welcome', async (req, res) => {
   try {
     if (!isEmailConfigured()) {
-      return res.status(503).json({ message: 'Configure Gmail API OAuth credentials and GMAIL_SENDER_EMAIL before sending welcome emails' });
+      return res.status(503).json({ message: 'Configure SMTP_SERVICE, SMTP_USER, and SMTP_PASS before sending welcome emails' });
     }
     const { teamAccountIds, sendToAll } = req.body;
     let accounts = [];
@@ -427,7 +447,7 @@ router.post('/send-welcome', async (req, res) => {
     res.json({ message: `Welcome emails sent to ${sent} team(s); ${skipped} skipped without contact emails`, sent, skipped });
   } catch (error) {
     console.error('Send Welcome Error:', error.code || 'unknown', error.statusCode || '');
-    if (error.code?.startsWith('GMAIL_') || error.code?.startsWith('GOOGLE_OAUTH_') || error.statusCode) {
+    if (error.code?.startsWith('SMTP_')) {
       const failure = emailProviderFailureResponse(error);
       return res.status(failure.status).json({ message: failure.message });
     }
@@ -439,7 +459,7 @@ router.post('/send-welcome', async (req, res) => {
 router.post('/send-bulk-status', async (req, res) => {
   try {
     if (!isEmailConfigured()) {
-      return res.status(503).json({ message: 'Configure Gmail API OAuth credentials and GMAIL_SENDER_EMAIL before sending status emails' });
+      return res.status(503).json({ message: 'Configure SMTP_SERVICE, SMTP_USER, and SMTP_PASS before sending status emails' });
     }
     const { teamAccountIds, type, roundNumber, nextRound } = req.body;
     if (!type || !['qualified', 'eliminated'].includes(type)) {
@@ -468,7 +488,7 @@ router.post('/send-bulk-status', async (req, res) => {
     res.json({ message: `Sent ${sent} email(s)` });
   } catch (error) {
     console.error('Send Bulk Status Error:', error.code || 'unknown', error.statusCode || '');
-    if (error.code?.startsWith('GMAIL_') || error.code?.startsWith('GOOGLE_OAUTH_') || error.statusCode) {
+    if (error.code?.startsWith('SMTP_')) {
       const failure = emailProviderFailureResponse(error);
       return res.status(failure.status).json({ message: failure.message });
     }

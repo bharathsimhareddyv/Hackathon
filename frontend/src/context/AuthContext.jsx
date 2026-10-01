@@ -58,8 +58,8 @@ export const AuthProvider = ({ children }) => {
     return userData;
   };
 
-  const teamLogin = async (loginId, password) => {
-    const res = await api.post('/auth/team-login', { loginId, password });
+  const teamLogin = async (loginId, password, termsAccepted) => {
+    const res = await api.post('/auth/team-login', { loginId, password, termsAccepted });
     const { token: jwtToken, user: userData } = res.data;
     localStorage.setItem('aarohan_token', jwtToken);
     localStorage.setItem('aarohan_user', JSON.stringify(userData));

@@ -54,6 +54,15 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'Round number and Team ID are required' });
     }
 
+    if (marks === undefined || marks === null || String(marks).trim() === '' || maxMarks === undefined || maxMarks === null || String(maxMarks).trim() === '') {
+      return res.status(400).json({ message: 'Enter awarded marks and maximum marks to save an evaluation' });
+    }
+    const numericMarks = Number(marks);
+    const numericMaxMarks = Number(maxMarks);
+    if (!Number.isFinite(numericMarks) || !Number.isFinite(numericMaxMarks) || numericMaxMarks <= 0 || numericMarks < 0 || numericMarks > numericMaxMarks) {
+      return res.status(400).json({ message: 'Marks must be between 0 and the maximum marks' });
+    }
+
     const team = await RoundTeam.findById(teamId);
     if (!team) return res.status(404).json({ message: 'Team not found' });
 

@@ -3,6 +3,7 @@ const router = express.Router();
 const Terms = require('../models/Terms');
 const TermsAcceptance = require('../models/TermsAcceptance');
 const Participant = require('../models/Participant');
+const TeamAccount = require('../models/TeamAccount');
 const ActivityLog = require('../models/ActivityLog');
 const { protect, adminOnly, studentOnly } = require('../middleware/authMiddleware');
 
@@ -103,6 +104,7 @@ router.post('/admin', protect, adminOnly, async (req, res) => {
 
     // Reset termsAccepted flag for all participants so they re-accept new version!
     await Participant.updateMany({}, { termsAccepted: false });
+    await TeamAccount.updateMany({}, { termsAccepted: false, termsVersionAccepted: null });
 
     await ActivityLog.create({
       actor: req.user.username || 'Admin',

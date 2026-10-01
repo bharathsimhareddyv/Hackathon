@@ -7,6 +7,7 @@ const Admin = require('../models/Admin');
 const TeamAccount = require('../models/TeamAccount');
 const Terms = require('../models/Terms');
 const TermsAcceptance = require('../models/TermsAcceptance');
+const RoundTeam = require('../models/RoundTeam');
 const OtpToken = require('../models/OtpToken');
 const { isEmailConfigured, sendMail } = require('../utils/emailService');
 const crypto = require('crypto');
@@ -78,7 +79,7 @@ router.post('/student-login', async (req, res) => {
 
 router.post('/team-login', async (req, res) => {
   try {
-    const { loginId, password } = req.body;
+    const { loginId, password, termsAccepted } = req.body;
     if (!loginId || !password) {
       return res.status(400).json({ message: 'Team login ID and password are required' });
     }
@@ -88,9 +89,42 @@ router.post('/team-login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid team login ID or password' });
     }
 
+    const currentTerms = await Terms.findOne({ isCurrent: true });
+    if (currentTerms && termsAccepted !== true) {
+      return res.status(400).json({ message: 'Accept the current Terms & Conditions before signing in' });
+    }
+
+    if (currentTerms) {
+      const assignments = await RoundTeam.find({ teamAccountId: team._id }).select('participantIds');
+      const participantIds = [...new Set(assignments.flatMap(assignment => assignment.participantIds || []))];
+      const acceptedAt = new Date();
+      await Promise.all(participantIds.map(participantId => TermsAcceptance.updateOne(
+        { participantId, termsVersion: currentTerms.version },
+        { $setOnInsert: {
+          participantId,
+          termsVersion: currentTerms.version,
+          acceptedAt,
+          ipAddress: req.ip || req.connection.remoteAddress,
+          userAgent: req.headers['user-agent'] || ''
+        } },
+        { upsert: true }
+      )));
+      await Participant.updateMany(
+        { arohanId: { $in: participantIds } },
+        { $set: { termsAccepted: true, termsVersionAccepted: currentTerms.version } }
+      );
+      await Participant.updateMany(
+        { arohanId: { $in: participantIds }, status: { $in: ['REGISTERED', 'TERMS_PENDING'] } },
+        { $set: { status: 'READY' } }
+      );
+      team.termsAccepted = true;
+      team.termsVersionAccepted = currentTerms.version;
+      await team.save();
+    }
+
     res.json({
       token: generateToken(team._id, 'TEAM'),
-      user: { id: team._id, loginId: team.loginId, role: 'TEAM', currentRound: team.currentRound, status: team.status }
+      user: { id: team._id, loginId: team.loginId, role: 'TEAM', currentRound: team.currentRound, status: team.status, termsAccepted: team.termsAccepted, termsVersionAccepted: team.termsVersionAccepted }
     });
   } catch (error) {
     console.error('Team Login Error:', error);
@@ -244,7 +278,7 @@ router.post('/admin-password-change/request-code', protect, async (req, res) => 
     const admin = await Admin.findById(req.user._id);
     if (!admin?.email) return res.status(400).json({ message: 'Your admin account needs an email address before changing its password' });
     if (!isEmailConfigured()) {
-      return res.status(503).json({ message: 'Configure Gmail API OAuth credentials and GMAIL_SENDER_EMAIL before requesting a verification code.' });
+      return res.status(503).json({ message: 'Configure SMTP_SERVICE, SMTP_USER, and SMTP_PASS before requesting a verification code.' });
     }
     const targetEmail = admin.email.trim().toLowerCase();
     const code = crypto.randomInt(100000, 1000000).toString();
@@ -264,8 +298,8 @@ router.post('/admin-password-change/request-code', protect, async (req, res) => 
     res.json({ message: `Verification code sent to ${targetEmail}`, email: targetEmail });
   } catch (error) {
     console.error('Admin Password OTP Error:', error.code || 'unknown', error.statusCode || '');
-    const status = error.code === 'GMAIL_NOT_CONFIGURED' ? 503 : error.code?.startsWith('GMAIL_') || error.code?.startsWith('GOOGLE_OAUTH_') ? 502 : 500;
-    res.status(status).json({ message: 'Could not send verification code through Gmail. Check the OAuth credentials and Gmail API access.' });
+    const status = error.code === 'SMTP_NOT_CONFIGURED' ? 503 : error.code?.startsWith('SMTP_') ? 502 : 500;
+    res.status(status).json({ message: 'Could not send the verification code through SMTP. Check the SMTP service and credentials.' });
   }
 });
 
