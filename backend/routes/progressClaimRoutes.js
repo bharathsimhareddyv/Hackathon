@@ -31,8 +31,11 @@ router.post('/', protect, teamOnly, uploadSubmission.single('proofZip'), async (
     if (!round) return res.status(404).json({ message: 'Round not found' });
 
     const now = new Date();
-    if (round.status !== 'ACTIVE' || (round.startAt && now < new Date(round.startAt)) || (round.endAt && now > new Date(round.endAt))) {
-      return res.status(400).json({ message: 'Progress can only be submitted while the round is active' });
+    if (round.status !== 'ACTIVE') {
+      return res.status(400).json({ message: 'Progress can only be submitted while the round status is ACTIVE' });
+    }
+    if (round.endAt && now > new Date(round.endAt)) {
+      return res.status(400).json({ message: 'The submission deadline for this round has passed' });
     }
 
     const team = await RoundTeam.findOne({
