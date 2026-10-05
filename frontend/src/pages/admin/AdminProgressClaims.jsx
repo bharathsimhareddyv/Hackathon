@@ -7,11 +7,19 @@ export default function AdminProgressClaims() {
   const { showToast } = useAuth();
   const [claims, setClaims] = useState([]);
   const [rounds, setRounds] = useState([]);
+  const [manualTeams, setManualTeams] = useState([]);
+  const [manualEvaluations, setManualEvaluations] = useState([]);
   const [roundNumber, setRoundNumber] = useState('');
+  const [manualRoundNumber, setManualRoundNumber] = useState('');
+  const [manualTeamId, setManualTeamId] = useState('');
+  const [manualMarks, setManualMarks] = useState('');
+  const [manualStatus, setManualStatus] = useState('QUALIFIED');
+  const [manualRemarks, setManualRemarks] = useState('');
   const [status, setStatus] = useState('PENDING');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
+  const [savingManual, setSavingManual] = useState(false);
   const [reviewMarks, setReviewMarks] = useState({});
 
   const refresh = async () => {
@@ -21,10 +29,72 @@ export default function AdminProgressClaims() {
       const [claimsRes, roundsRes] = await Promise.all([api.get('/progress-claims/admin', { params }), api.get('/rounds')]);
       setClaims(claimsRes.data);
       setRounds(roundsRes.data);
+      if (!manualRoundNumber && roundsRes.data.length > 0) setManualRoundNumber(String(roundsRes.data[0].roundNumber));
     } catch (err) { showToast(err.response?.data?.message || 'Could not load progress claims', 'error'); }
     finally { setLoading(false); }
   };
   useEffect(() => { refresh(); }, [status, roundNumber, search]);
+
+  useEffect(() => {
+    if (!manualRoundNumber) return;
+    const fetchManualRound = async () => {
+      try {
+        const [teamsRes, evaluationsRes] = await Promise.all([
+          api.get(`/admin/teams/round/${manualRoundNumber}`),
+          api.get(`/admin/evaluations/round/${manualRoundNumber}`)
+        ]);
+        setManualTeams(teamsRes.data);
+        setManualEvaluations(evaluationsRes.data);
+        const teamId = teamsRes.data[0]?._id || '';
+        const existing = evaluationsRes.data.find(evaluation => String(evaluation.teamId?._id || evaluation.teamId) === String(teamId));
+        setManualTeamId(teamId);
+        setManualMarks(existing ? String(existing.marks) : '');
+        setManualStatus(existing?.status || 'QUALIFIED');
+        setManualRemarks(existing?.remarks || '');
+      } catch (err) {
+        showToast(err.response?.data?.message || 'Could not load teams for manual scoring', 'error');
+      }
+    };
+    fetchManualRound();
+  }, [manualRoundNumber, showToast]);
+
+  const selectManualTeam = teamId => {
+    setManualTeamId(teamId);
+    const existing = manualEvaluations.find(evaluation => String(evaluation.teamId?._id || evaluation.teamId) === String(teamId));
+    setManualMarks(existing ? String(existing.marks) : '');
+    setManualStatus(existing?.status || 'QUALIFIED');
+    setManualRemarks(existing?.remarks || '');
+  };
+
+  const saveManualEvaluation = async event => {
+    event.preventDefault();
+    const round = rounds.find(item => String(item.roundNumber) === String(manualRoundNumber));
+    const marks = Number(manualMarks);
+    const maxMarks = Number(round?.maxMarks);
+    if (!manualTeamId || !Number.isFinite(marks) || marks < 0 || marks > maxMarks) {
+      showToast(`Enter marks between 0 and ${maxMarks || 100}`, 'error');
+      return;
+    }
+    setSavingManual(true);
+    try {
+      await api.post('/admin/evaluations', {
+        roundNumber: Number(manualRoundNumber),
+        teamId: manualTeamId,
+        marks,
+        maxMarks,
+        status: manualStatus,
+        remarks: manualRemarks
+      });
+      showToast('Manual marks and qualification result saved', 'success');
+      const evaluationsRes = await api.get(`/admin/evaluations/round/${manualRoundNumber}`);
+      setManualEvaluations(evaluationsRes.data);
+      refresh();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Could not save manual marks', 'error');
+    } finally {
+      setSavingManual(false);
+    }
+  };
 
   const review = async (claim, action) => {
     const maxMarks = Number(rounds.find(round => round.roundNumber === claim.roundNumber)?.maxMarks || 100);
@@ -75,7 +145,7 @@ export default function AdminProgressClaims() {
   };
 
   const closeRound = async () => {
-    if (!roundNumber || !window.confirm(`Close Round ${roundNumber} and eliminate teams without an approved progress claim?`)) return;
+    if (!roundNumber || !window.confirm(`Close Round ${roundNumber} and eliminate teams without an approved claim or manually qualified evaluation?`)) return;
     try {
       const response = await api.post(`/progress-claims/admin/close-round/${roundNumber}`);
       showToast(response.data.message, 'success');
@@ -86,7 +156,18 @@ export default function AdminProgressClaims() {
   };
 
   return <div className="space-y-6">
-    <header><p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Organizer decisions</p><h1 className="mt-1 font-outfit text-3xl font-extrabold text-white">Progress approvals</h1><p className="mt-2 text-sm text-slate-400">Enter final marks, then approve or reject each submission. The decision and score update the leaderboard.</p></header>
+    <header><p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Organizer decisions</p><h1 className="mt-1 font-outfit text-3xl font-extrabold text-white">Progress approvals</h1><p className="mt-2 text-sm text-slate-400">Review submitted progress or record marks and qualification manually for any assigned team.</p></header>
+    <section className="glass-panel rounded-2xl border border-cyan-900/70 p-4 sm:p-6">
+      <div className="mb-4"><h2 className="font-outfit text-lg font-bold text-white">Manual marks entry</h2><p className="mt-1 text-xs text-slate-400">No student submission is needed. Saved results update the leaderboard and round qualification.</p></div>
+      <form onSubmit={saveManualEvaluation} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1.5fr_1fr_1fr_1.5fr_auto] lg:items-end">
+        <label className="text-xs text-slate-400">Round<select value={manualRoundNumber} onChange={event => setManualRoundNumber(event.target.value)} className="glass-input mt-1 w-full rounded-lg px-3 py-2.5 text-sm text-white">{rounds.map(round => <option key={round._id} value={round.roundNumber}>Round {round.roundNumber}</option>)}</select></label>
+        <label className="text-xs text-slate-400">Team<select value={manualTeamId} onChange={event => selectManualTeam(event.target.value)} disabled={!manualTeams.length} className="glass-input mt-1 w-full rounded-lg px-3 py-2.5 text-sm text-white"><option value="">{manualTeams.length ? 'Select a team' : 'No teams assigned'}</option>{manualTeams.map(team => <option key={team._id} value={team._id}>{team.teamCode} {team.participantIds?.length ? `(${team.participantIds.join(', ')})` : ''}</option>)}</select></label>
+        <label className="text-xs text-slate-400">Marks / {rounds.find(round => String(round.roundNumber) === String(manualRoundNumber))?.maxMarks || 100}<input type="number" min="0" max={rounds.find(round => String(round.roundNumber) === String(manualRoundNumber))?.maxMarks || 100} step="any" value={manualMarks} onChange={event => setManualMarks(event.target.value)} required className="glass-input mt-1 w-full rounded-lg px-3 py-2.5 text-sm text-white" /></label>
+        <label className="text-xs text-slate-400">Result<select value={manualStatus} onChange={event => setManualStatus(event.target.value)} className="glass-input mt-1 w-full rounded-lg px-3 py-2.5 text-sm text-white"><option value="QUALIFIED">Qualified</option><option value="NOT_QUALIFIED">Not qualified</option><option value="PENDING">Pending</option><option value="DISQUALIFIED">Disqualified</option></select></label>
+        <label className="text-xs text-slate-400">Remarks<input value={manualRemarks} onChange={event => setManualRemarks(event.target.value)} placeholder="Optional" className="glass-input mt-1 w-full rounded-lg px-3 py-2.5 text-sm text-white" /></label>
+        <button type="submit" disabled={savingManual || !manualTeamId} className="rounded-lg bg-cyan-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-cyan-600 disabled:opacity-50">{savingManual ? 'Saving…' : 'Save marks'}</button>
+      </form>
+    </section>
     <section className="glass-panel rounded-2xl border border-slate-800 p-4 sm:p-6">
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_2fr_auto]">
         <label className="text-xs text-slate-400">Status<select value={status} onChange={event => setStatus(event.target.value)} className="glass-input mt-1 w-full rounded-lg px-3 py-2.5 text-sm text-white"><option value="PENDING">Pending</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select></label>

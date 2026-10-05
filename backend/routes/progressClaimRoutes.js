@@ -272,7 +272,12 @@ router.post('/admin/close-round/:roundNumber', async (req, res) => {
         teamId: team._id,
         status: 'APPROVED'
       });
-      if (!approved) {
+      const manualQualification = await Evaluation.findOne({
+        roundNumber: rNum,
+        teamId: team._id,
+        status: 'QUALIFIED'
+      });
+      if (!approved && !manualQualification) {
         await TeamAccount.findByIdAndUpdate(team.teamAccountId, {
           status: 'ELIMINATED',
           eliminatedAtRound: rNum
