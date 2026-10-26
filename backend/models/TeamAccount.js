@@ -10,6 +10,7 @@ const TeamAccountSchema = new mongoose.Schema({
   },
   passwordHash: { type: String, required: true },
   temporaryPasswordPlain: { type: String, default: null },
+  branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', default: null },
   memberNames: [{ type: String, trim: true }],
   contactEmails: [{ type: String, trim: true, lowercase: true }],
   termsAccepted: { type: Boolean, default: false },

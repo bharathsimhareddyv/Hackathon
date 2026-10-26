@@ -1,21 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import api from '../utils/api';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import StatusBadge from '../components/StatusBadge';
-import { Trophy, Medal, Award, EyeOff, Search } from 'lucide-react';
+import { Trophy, EyeOff, Search } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function LeaderboardPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [leaderboard, setLeaderboard] = useState([]);
   const [rounds, setRounds] = useState([]);
   const [isPublic, setIsPublic] = useState(true);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [selectedRound, setSelectedRound] = useState('all');
 
-  const fetchLeaderboard = async () => {
+  const fetchLeaderboard = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get('/leaderboard');
+      const res = await api.get('/leaderboard', { params: { roundNumber: selectedRound } });
       setIsPublic(res.data.public);
       setRounds(res.data.rounds || []);
       setLeaderboard(res.data.leaderboard || []);
@@ -24,11 +28,11 @@ export default function LeaderboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedRound]);
 
   useEffect(() => {
     fetchLeaderboard();
-  }, []);
+  }, [fetchLeaderboard]);
 
   const filtered = leaderboard.filter(item => {
     const code = item.teamCode ? item.teamCode.toLowerCase() : '';
@@ -78,7 +82,13 @@ export default function LeaderboardPage() {
                 />
               </div>
 
-              <div className="text-xs text-slate-400 font-mono">
+              <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
+                <label className="flex items-center gap-2">Rank by
+                  <select value={selectedRound} onChange={event => setSelectedRound(event.target.value)} className="glass-input rounded-lg px-3 py-2 text-xs">
+                    <option value="all">All rounds</option>
+                    {rounds.map(round => <option key={round._id || round.roundNumber} value={round.roundNumber}>{round.name}</option>)}
+                  </select>
+                </label>
                 Total Ranked Teams: <strong className="text-cyan-400">{filtered.length}</strong>
               </div>
             </div>
@@ -96,8 +106,9 @@ export default function LeaderboardPage() {
                     <tr>
                       <th className="py-3.5 px-4 font-semibold">Rank</th>
                       <th className="py-3.5 px-4 font-semibold">Team Code</th>
+                      {isAdmin && <th className="py-3.5 px-4 font-semibold">Branch</th>}
                       <th className="py-3.5 px-4 font-semibold">Participants</th>
-                      {rounds.map(round => <th key={round._id} className="py-3.5 px-4 text-center font-semibold">Round {round.roundNumber}<span className="mt-1 block normal-case text-slate-500">/ {round.maxMarks}</span></th>)}
+                      {rounds.map(round => <th key={round._id} className="py-3.5 px-4 text-center font-semibold">{round.name}<span className="mt-1 block normal-case text-slate-500">/ {round.maxMarks}</span></th>)}
                       <th className="py-3.5 px-4 font-semibold text-right">Total Marks</th>
                       <th className="py-3.5 px-4 font-semibold text-center">Status</th>
                     </tr>
@@ -126,6 +137,8 @@ export default function LeaderboardPage() {
                         <td className="py-4 px-4 font-mono font-bold text-indigo-300">
                           {item.teamCode}
                         </td>
+
+                        {isAdmin && <td className="py-4 px-4">{item.branchName || '—'}</td>}
 
                         <td className="py-4 px-4 font-mono">
                           <div className="flex flex-wrap gap-1">

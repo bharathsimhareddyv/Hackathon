@@ -12,6 +12,7 @@ const ActivityLog = require('../models/ActivityLog');
 const TeamAccount = require('../models/TeamAccount');
 const ProgressClaim = require('../models/ProgressClaim');
 const { protect, adminOnly, studentOnly } = require('../middleware/authMiddleware');
+const { roundsVisibleToBranch } = require('../utils/roundVisibility');
 
 // @route GET /api/student/dashboard
 router.get('/student', protect, studentOnly, async (req, res) => {
@@ -30,8 +31,13 @@ router.get('/student', protect, studentOnly, async (req, res) => {
       termsAccepted = !!acceptance;
     }
 
-    // Get all rounds
-    const rounds = await Round.find().sort({ roundNumber: 1 });
+    const accessibleRounds = await Round.find(roundsVisibleToBranch(participant.branchId)).sort({ roundNumber: 1 });
+    const assignedRounds = await RoundTeam.find({
+      participantIds: participant.arohanId,
+      roundNumber: { $in: accessibleRounds.map(round => round.roundNumber) }
+    }).select('roundNumber teamCode');
+    const assignedRoundNumbers = [...new Set(assignedRounds.map(item => item.roundNumber))];
+    const rounds = accessibleRounds.filter(round => assignedRoundNumbers.includes(round.roundNumber));
 
     // Current active or qualification round
     const activeRound = rounds.find(r => r.status === 'ACTIVE') || rounds.find(r => r.roundNumber === participant.currentRound) || rounds[0];
@@ -68,11 +74,17 @@ router.get('/student', protect, studentOnly, async (req, res) => {
     const evaluationsAll = await Evaluation.find({
       participantIds: participant.arohanId
     }).sort({ roundNumber: 1 });
+    const allSubmissions = await Submission.find({ participantId: participant.arohanId }).sort({ submittedAt: -1 });
+    const totalMarks = evaluationsAll.reduce((total, evaluation) => total + (Number(evaluation.marks) || 0), 0);
+    const currentMemberIndex = currentTeam?.participantIds?.indexOf(participant.arohanId) ?? -1;
+    const visibleStudentName = participant.name ||
+      (currentMemberIndex >= 0 ? currentTeam.memberNames?.[currentMemberIndex] : null) ||
+      null;
 
     res.json({
       participant: {
         arohanId: participant.arohanId,
-        name: participant.name,
+        name: visibleStudentName,
         college: participant.college,
         currentRound: participant.currentRound,
         status: participant.status,
@@ -85,7 +97,14 @@ router.get('/student', protect, studentOnly, async (req, res) => {
       currentProject,
       currentEvaluation,
       mySubmissions,
-      evaluationsAll
+      evaluationsAll,
+      personalStats: {
+        assignedRounds: assignedRoundNumbers.length,
+        totalSubmissions: allSubmissions.length,
+        evaluatedRounds: evaluationsAll.length,
+        totalMarks,
+        averageMarks: evaluationsAll.length ? Math.round(totalMarks / evaluationsAll.length) : 0
+      }
     });
   } catch (error) {
     console.error('Student Dashboard Error:', error);
@@ -101,19 +120,27 @@ router.get('/admin', protect, adminOnly, async (req, res) => {
     const totalTeams = await TeamAccount.countDocuments();
     const activeTeams = await TeamAccount.countDocuments({ status: 'ACTIVE' });
     const pendingProgressClaims = await ProgressClaim.countDocuments({ status: 'PENDING' });
-
-    const round1Teams = await RoundTeam.countDocuments({ roundNumber: 1 });
-    const round1Qualified = await Evaluation.countDocuments({ roundNumber: 1, status: 'QUALIFIED' });
-    const round1NotQualified = await Evaluation.countDocuments({ roundNumber: 1, status: 'NOT_QUALIFIED' });
-
-    const round2Teams = await RoundTeam.countDocuments({ roundNumber: 2 });
-    const round2Qualified = await Evaluation.countDocuments({ roundNumber: 2, status: 'QUALIFIED' });
-
-    const round3Teams = await RoundTeam.countDocuments({ roundNumber: 3 });
-    const finalSubmissions = await Submission.countDocuments({ roundNumber: 3 });
-
     const rounds = await Round.find().sort({ roundNumber: 1 });
     const activeRound = rounds.find(r => r.status === 'ACTIVE') || null;
+    const roundStats = await Promise.all(rounds.map(async round => {
+      const [teams, submissions, evaluations, qualifiedTeams, notQualifiedTeams] = await Promise.all([
+        RoundTeam.countDocuments({ roundNumber: round.roundNumber }),
+        Submission.countDocuments({ roundNumber: round.roundNumber }),
+        Evaluation.countDocuments({ roundNumber: round.roundNumber }),
+        Evaluation.countDocuments({ roundNumber: round.roundNumber, status: 'QUALIFIED' }),
+        Evaluation.countDocuments({ roundNumber: round.roundNumber, status: 'NOT_QUALIFIED' })
+      ]);
+      return {
+        roundNumber: round.roundNumber,
+        name: round.name,
+        status: round.status,
+        teams,
+        submissions,
+        evaluations,
+        qualifiedTeams,
+        notQualifiedTeams
+      };
+    }));
 
     const recentActivityLogs = await ActivityLog.find().sort({ timestamp: -1 }).limit(10);
 
@@ -123,16 +150,10 @@ router.get('/admin', protect, adminOnly, async (req, res) => {
         activeParticipants,
         totalTeams,
         activeTeams,
-        pendingProgressClaims,
-        round1Teams,
-        round1Qualified,
-        round1NotQualified,
-        round2Teams,
-        round2Qualified,
-        round3Teams,
-        finalSubmissions
+        pendingProgressClaims
       },
       rounds,
+      roundStats,
       activeRound,
       recentActivityLogs
     });

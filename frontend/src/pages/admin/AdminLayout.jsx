@@ -1,38 +1,18 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import api from '../../utils/api';
 import AarohanLogo from '../../components/AarohanLogo';
 import {
   LayoutDashboard, Users, KeyRound, Clock, UserCheck, FolderGit2,
   Award, UploadCloud, Trophy, FileSpreadsheet, FileText, History,
-  Settings, LogOut, Menu, X, Sparkles, Terminal, ShieldCheck
+  Settings, LogOut, Menu, X, Terminal, ShieldCheck, GitBranch, Eye
 } from 'lucide-react';
 
 export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [seeding, setSeeding] = useState(false);
-  const { user, logout, showToast } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-
-  const handleSeedDemoData = async () => {
-    if (!window.confirm('Seed Demo Mode data? This will create 5 demo participants (AIF260001-AIF260005), sample rounds, project ZIPs, and sample evaluations.')) {
-      return;
-    }
-
-    try {
-      setSeeding(true);
-      await api.post('/admin/demo/seed');
-      showToast('Demo Mode data seeded successfully!', 'success');
-      window.location.reload();
-    } catch (err) {
-      console.error('Seed Error:', err);
-      showToast('Failed to seed demo data', 'error');
-    } finally {
-      setSeeding(false);
-    }
-  };
 
   const navItems = [
     { path: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -40,6 +20,8 @@ export default function AdminLayout() {
     { path: '/admin/credentials', label: 'Credentials', icon: KeyRound },
     { path: '/admin/team-accounts', label: 'Team Accounts', icon: Users },
     { path: '/admin/accounts', label: 'Admin Accounts', icon: ShieldCheck },
+    { path: '/admin/branches', label: 'Branch Sections', icon: GitBranch },
+    { path: '/admin/viewers', label: 'Viewer Access', icon: Eye },
     { path: '/admin/rounds', label: 'Rounds & Timings', icon: Clock },
     { path: '/admin/teams', label: 'Team Assignments', icon: UserCheck },
     { path: '/admin/projects', label: 'Project Manager', icon: FolderGit2 },
@@ -79,18 +61,6 @@ export default function AdminLayout() {
           {/* Logo Brand Header */}
           <div className="p-6 border-b border-slate-800/80 flex items-center gap-3">
             <AarohanLogo />
-          </div>
-
-          {/* Quick Demo Mode Seed Button */}
-          <div className="px-4 py-3 border-b border-slate-800/50">
-            <button
-              onClick={handleSeedDemoData}
-              disabled={seeding}
-              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-indigo-600/30 to-cyan-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold hover:bg-amber-500/30 transition-all flex items-center justify-center gap-2 shadow-sm"
-            >
-              <Sparkles className="w-4 h-4 text-amber-300 animate-spin-slow" />
-              <span>{seeding ? 'Seeding...' : 'SEED DEMO MODE'}</span>
-            </button>
           </div>
 
           {/* Nav Items List */}

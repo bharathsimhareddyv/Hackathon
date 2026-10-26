@@ -23,6 +23,8 @@ export default function AdminTeamAccounts() {
   const [memberNames, setMemberNames] = useState('');
   const [contactEmails, setContactEmails] = useState('');
   const [count, setCount] = useState(1);
+  const [teamName, setTeamName] = useState('');
+  const [startingNumber, setStartingNumber] = useState('1');
   const [credentials, setCredentials] = useState([]);
   const [selected, setSelected] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +73,12 @@ export default function AdminTeamAccounts() {
   const generateMany = async () => {
     try {
       setWorking(true);
-      const response = await api.post('/admin/team-accounts/bulk-generate', { count: Number(count), roundNumber: Number(roundNumber) });
+      const response = await api.post('/admin/team-accounts/bulk-generate', {
+        count: Number(count),
+        roundNumber: Number(roundNumber),
+        teamName: teamName.trim() || undefined,
+        startingNumber: Number(startingNumber)
+      });
       setCredentials(response.data.teams);
       showToast(response.data.message, 'success');
       refresh();
@@ -196,7 +203,7 @@ export default function AdminTeamAccounts() {
   };
 
   return <div className="space-y-7">
-    <header><p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Access and invitations</p><h1 className="mt-1 font-outfit text-3xl font-extrabold text-white">Team accounts</h1><p className="mt-2 text-sm text-slate-400">Create randomized team IDs, assign rounds, manage contact emails, and send welcome details in bulk.</p></header>
+    <header><p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Access and invitations</p><h1 className="mt-1 font-outfit text-3xl font-extrabold text-white">Team accounts</h1><p className="mt-2 text-sm text-slate-400">Create team IDs, assign rounds, manage contact emails, and send welcome details in bulk.</p></header>
     <div className="grid gap-6 xl:grid-cols-2">
       <section className="glass-panel rounded-2xl border border-emerald-500/20 p-5 sm:p-6">
         <h2 className="flex items-center gap-2 font-bold text-white"><Plus className="h-4 w-4 text-emerald-300" /> Create a team account</h2>
@@ -211,10 +218,12 @@ export default function AdminTeamAccounts() {
       </section>
       <section className="glass-panel rounded-2xl border border-slate-800 p-5 sm:p-6">
         <h2 className="flex items-center gap-2 font-bold text-white"><Users className="h-4 w-4 text-cyan-300" /> Generate teams in bulk</h2>
-        <p className="mt-2 text-xs leading-5 text-slate-400">Bulk-created accounts receive unique IDs and passwords. Add team email addresses in the accounts list before sending invitations.</p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_2fr]">
+        <p className="mt-2 text-xs leading-5 text-slate-400">Optionally enter a team name and starting number to create IDs like team-alpha1, team-alpha2. Leave the name blank to use the automatic Aarohan IDs.</p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs text-slate-300">Team name (optional)<input value={teamName} onChange={event => setTeamName(event.target.value)} maxLength={40} placeholder="Team Alpha" className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
+          <label className="text-xs text-slate-300">Starting number<input type="number" min="1" max="999999999" value={startingNumber} onChange={event => setStartingNumber(event.target.value)} disabled={!teamName.trim()} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm disabled:opacity-50" /></label>
           <label className="text-xs text-slate-300">Number of teams<input type="number" min="1" max="200" value={count} onChange={event => setCount(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
-          <button onClick={generateMany} disabled={working || !rounds.length} className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-cyan-700 bg-cyan-950/60 px-4 py-2.5 text-xs font-bold text-cyan-200 hover:bg-cyan-900 disabled:opacity-50"><RefreshCw className="h-4 w-4" />Generate randomized team IDs</button>
+          <button onClick={generateMany} disabled={working || !rounds.length} className="mt-auto flex items-center justify-center gap-2 rounded-lg border border-cyan-700 bg-cyan-950/60 px-4 py-2.5 text-xs font-bold text-cyan-200 hover:bg-cyan-900 disabled:opacity-50"><RefreshCw className="h-4 w-4" />{teamName.trim() ? 'Generate named team IDs' : 'Generate automatic team IDs'}</button>
         </div>
       </section>
     </div>

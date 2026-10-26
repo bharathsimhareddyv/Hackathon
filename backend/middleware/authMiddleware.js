@@ -2,6 +2,8 @@ const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
 const Participant = require('../models/Participant');
 const TeamAccount = require('../models/TeamAccount');
+const Branch = require('../models/Branch');
+const Viewer = require('../models/Viewer');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'aarohan_hackathon_super_secret_jwt_token_key_2026_tribal_students';
 
@@ -25,6 +27,18 @@ const protect = async (req, res, next) => {
       } else if (decoded.role === 'STUDENT') {
         req.user = await Participant.findById(decoded.id).select('-passwordHash');
         req.user.role = 'STUDENT';
+      } else if (decoded.role === 'BRANCH_ADMIN') {
+        req.user = await Branch.findById(decoded.id).select('-passwordHash');
+        if (req.user && !req.user.loginEnabled) {
+          return res.status(401).json({ message: 'This branch login has been disabled' });
+        }
+        if (req.user) req.user.role = 'BRANCH_ADMIN';
+      } else if (decoded.role === 'VIEWER') {
+        req.user = await Viewer.findById(decoded.id).select('-passwordHash');
+        if (req.user && !req.user.loginEnabled) {
+          return res.status(401).json({ message: 'This viewer login has been disabled' });
+        }
+        if (req.user) req.user.role = 'VIEWER';
       }
 
       if (!req.user) {
@@ -64,6 +78,20 @@ const teamOnly = (req, res, next) => {
   return res.status(403).json({ message: 'Access denied: Team access only' });
 };
 
+const branchOnly = (req, res, next) => {
+  if (req.user && req.user.role === 'BRANCH_ADMIN') {
+    return next();
+  }
+  return res.status(403).json({ message: 'Access denied: Branch access only' });
+};
+
+const viewerOnly = (req, res, next) => {
+  if (req.user && req.user.role === 'VIEWER') {
+    return next();
+  }
+  return res.status(403).json({ message: 'Access denied: Viewer access only' });
+};
+
 const teamOrStudent = (req, res, next) => {
   if (req.user && (req.user.role === 'TEAM' || req.user.role === 'STUDENT')) {
     return next();
@@ -71,4 +99,4 @@ const teamOrStudent = (req, res, next) => {
   return res.status(403).json({ message: 'Access denied: Team or student access only' });
 };
 
-module.exports = { protect, adminOnly, studentOnly, teamOnly, teamOrStudent, JWT_SECRET };
+module.exports = { protect, adminOnly, studentOnly, teamOnly, branchOnly, viewerOnly, teamOrStudent, JWT_SECRET };

@@ -5,6 +5,7 @@ const SubmissionSchema = new mongoose.Schema({
   teamId: { type: mongoose.Schema.Types.ObjectId, ref: 'RoundTeam', default: null },
   teamCode: { type: String, default: '' },
   participantId: { type: String, uppercase: true, required: true },
+  branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', default: null },
   githubUrl: { type: String, default: '' },
   commitSha: { type: String, default: '' },
   zipPath: { type: String, default: '' },

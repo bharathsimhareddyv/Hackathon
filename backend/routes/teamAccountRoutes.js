@@ -10,10 +10,11 @@ const Submission = require('../models/Submission');
 const Round = require('../models/Round');
 const Terms = require('../models/Terms');
 const TermsAcceptance = require('../models/TermsAcceptance');
+const syncParticipantTerms = require('../utils/syncParticipantTerms');
 const ActivityLog = require('../models/ActivityLog');
 const { protect, adminOnly, teamOnly } = require('../middleware/authMiddleware');
 const { generateRandomPassword } = require('../utils/passwordGenerator');
-const { nextAarohanTeamLoginId } = require('../utils/teamLoginId');
+const { nextAarohanTeamLoginId, sequentialTeamLoginIds } = require('../utils/teamLoginId');
 const {
   DEFAULT_WELCOME_EMAIL_SUBJECT,
   DEFAULT_WELCOME_EMAIL_BODY,
@@ -123,6 +124,7 @@ router.post('/create', async (req, res) => {
       roundNumber: parseInt(roundNumber, 10),
       teamCode,
       teamAccountId: account._id,
+      branchId: account.branchId || null,
       memberNames: account.memberNames,
       participantIds: [],
       projectId: projectId || null
@@ -157,14 +159,30 @@ router.post('/create', async (req, res) => {
 // POST bulk generate teams for a round
 router.post('/bulk-generate', async (req, res) => {
   try {
-    const { count = 1, roundNumber, projectId, memberNamesPerTeam = [] } = req.body;
+    const { count = 1, roundNumber, projectId, memberNamesPerTeam = [], teamName, startingNumber } = req.body;
     const n = Math.min(Math.max(parseInt(count, 10) || 1, 1), 200);
     const rNum = parseInt(roundNumber, 10);
     if (!rNum) return res.status(400).json({ message: 'roundNumber is required' });
 
+    let customLoginIds = null;
+    if (teamName) {
+      try {
+        customLoginIds = sequentialTeamLoginIds(teamName, startingNumber, n);
+      } catch (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
+      const existingAccounts = await TeamAccount.find({ loginId: { $in: customLoginIds } }).select('loginId');
+      if (existingAccounts.length) {
+        return res.status(409).json({
+          message: `These team IDs already exist: ${existingAccounts.map(account => account.loginId).join(', ')}`
+        });
+      }
+    }
+
     const created = [];
     for (let i = 0; i < n; i++) {
-      const loginId = await nextAarohanTeamLoginId(rNum);
+      const loginId = customLoginIds ? customLoginIds[i] : await nextAarohanTeamLoginId(rNum);
       const plainPassword = generateRandomPassword();
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(plainPassword, salt);
@@ -187,6 +205,7 @@ router.post('/bulk-generate', async (req, res) => {
         roundNumber: rNum,
         teamCode: loginId,
         teamAccountId: account._id,
+        branchId: account.branchId || null,
         memberNames: names,
         participantIds: [],
         projectId: projectId || null
@@ -269,14 +288,7 @@ router.post('/:id/assign-participants', async (req, res) => {
         } },
         { upsert: true }
       )));
-      await Participant.updateMany(
-        { arohanId: { $in: cleanIds } },
-        { $set: { termsAccepted: true, termsVersionAccepted: currentTerms.version } }
-      );
-      await Participant.updateMany(
-        { arohanId: { $in: cleanIds }, status: { $in: ['REGISTERED', 'TERMS_PENDING'] } },
-        { $set: { status: 'READY' } }
-      );
+      await syncParticipantTerms(cleanIds);
     }
 
     await ActivityLog.create({

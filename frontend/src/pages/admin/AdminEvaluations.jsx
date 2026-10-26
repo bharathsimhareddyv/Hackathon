@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Award, Save, CheckCircle, XCircle, RotateCcw, AlertTriangle } from 'lucide-react';
 
 export default function AdminEvaluations() {
-  const [selectedRound, setSelectedRound] = useState(1);
+  const [selectedRound, setSelectedRound] = useState('');
   const [teams, setTeams] = useState([]);
   const [evaluations, setEvaluations] = useState([]);
   const [rounds, setRounds] = useState([]);
@@ -13,12 +13,12 @@ export default function AdminEvaluations() {
   const [loading, setLoading] = useState(true);
 
   // Form State
-  const [totalErrors, setTotalErrors] = useState(200);
-  const [errorsSolved, setErrorsSolved] = useState(137);
-  const [htmlSolved, setHtmlSolved] = useState(35);
-  const [cssSolved, setCssSolved] = useState(32);
-  const [jsSolved, setJsSolved] = useState(38);
-  const [reactSolved, setReactSolved] = useState(32);
+  const [totalErrors, setTotalErrors] = useState(0);
+  const [errorsSolved, setErrorsSolved] = useState(0);
+  const [htmlSolved, setHtmlSolved] = useState(0);
+  const [cssSolved, setCssSolved] = useState(0);
+  const [jsSolved, setJsSolved] = useState(0);
+  const [reactSolved, setReactSolved] = useState(0);
 
   const [marks, setMarks] = useState('');
   const [maxMarks, setMaxMarks] = useState(100);
@@ -31,19 +31,25 @@ export default function AdminEvaluations() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [teamsRes, evalsRes, roundsRes] = await Promise.all([
-        api.get(`/admin/teams/round/${selectedRound}`),
-        api.get(`/admin/evaluations/round/${selectedRound}`),
-        api.get('/rounds')
+      const roundsRes = await api.get('/rounds');
+      setRounds(roundsRes.data);
+      const activeRoundNumber = selectedRound || roundsRes.data[0]?.roundNumber;
+      if (!activeRoundNumber) {
+        setTeams([]);
+        setEvaluations([]);
+        setSelectedTeamId('');
+        return;
+      }
+      if (!selectedRound) setSelectedRound(String(activeRoundNumber));
+      const [teamsRes, evalsRes] = await Promise.all([
+        api.get(`/admin/teams/round/${activeRoundNumber}`),
+        api.get(`/admin/evaluations/round/${activeRoundNumber}`)
       ]);
-
       setTeams(teamsRes.data);
       setEvaluations(evalsRes.data);
-      setRounds(roundsRes.data);
-
-      if (teamsRes.data.length > 0 && !selectedTeamId) {
-        setSelectedTeamId(teamsRes.data[0]._id);
-      }
+      setSelectedTeamId(current => teamsRes.data.some(team => team._id === current)
+        ? current
+        : teamsRes.data[0]?._id || '');
     } catch (err) {
       console.error('Fetch Evaluation Data Error:', err);
     } finally {
@@ -58,11 +64,12 @@ export default function AdminEvaluations() {
   // When team changes, prefill form with existing evaluation if available
   useEffect(() => {
     if (!selectedTeamId) return;
-    const roundMaxMarks = rounds.find(round => round.roundNumber === selectedRound)?.maxMarks ?? 100;
+    const currentRound = rounds.find(round => String(round.roundNumber) === String(selectedRound));
+    const roundMaxMarks = currentRound?.maxMarks ?? 100;
     const existing = evaluations.find(e => String(e.teamId?._id || e.teamId) === String(selectedTeamId));
 
     if (existing) {
-      setTotalErrors(existing.totalErrors || 200);
+      setTotalErrors(existing.totalErrors ?? 0);
       setErrorsSolved(existing.errorsSolved || 0);
       setHtmlSolved(existing.htmlSolved || 0);
       setCssSolved(existing.cssSolved || 0);
@@ -74,12 +81,12 @@ export default function AdminEvaluations() {
       setStatus(existing.status || 'PENDING');
     } else {
       // Default initial values
-      setTotalErrors(200);
-      setErrorsSolved(137);
-      setHtmlSolved(35);
-      setCssSolved(32);
-      setJsSolved(38);
-      setReactSolved(32);
+      setTotalErrors(0);
+      setErrorsSolved(0);
+      setHtmlSolved(0);
+      setCssSolved(0);
+      setJsSolved(0);
+      setReactSolved(0);
       setMarks('');
       setMaxMarks(roundMaxMarks);
       setRemarks('');
@@ -133,6 +140,7 @@ export default function AdminEvaluations() {
   };
 
   const currentTeam = teams.find(t => t._id === selectedTeamId);
+  const currentRound = rounds.find(round => String(round.roundNumber) === String(selectedRound));
 
   return (
     <div className="space-y-8">
@@ -150,10 +158,10 @@ export default function AdminEvaluations() {
               key={round._id}
               onClick={() => { setSelectedRound(round.roundNumber); setSelectedTeamId(''); }}
               className={`px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all ${
-                selectedRound === round.roundNumber ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-slate-200'
+                String(selectedRound) === String(round.roundNumber) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              ROUND {round.roundNumber} EVALUATION
+              {round.name}
             </button>
           ))}
         </div>
@@ -167,7 +175,7 @@ export default function AdminEvaluations() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
             <div>
               <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest block font-mono">
-                EVALUATION MARKSHEET — ROUND {selectedRound}
+                EVALUATION MARKSHEET — {currentRound?.name || 'Select a round'}
               </span>
               <h2 className="text-xl font-bold text-white font-outfit">
                 {currentTeam ? currentTeam.teamCode : 'Select Team'}
@@ -206,11 +214,10 @@ export default function AdminEvaluations() {
                 </div>
               </div>
 
-              {/* Debugging Category Breakdown (Round 1) */}
-              {selectedRound === 1 && (
+              {currentRound?.type === 'DEBUGGING' && (
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
-                    DEBUGGING TASKS SOLVED (OUT OF 200 ERRORS)
+                    DEBUGGING TASKS SOLVED (OUT OF {totalErrors} ERRORS)
                   </h3>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950 p-4 rounded-2xl border border-slate-800">
@@ -258,7 +265,7 @@ export default function AdminEvaluations() {
                   <div className="flex items-center justify-between px-2 text-xs font-mono">
                     <span className="text-slate-400">Total Errors Solved:</span>
                     <strong className="text-cyan-400 text-sm">
-                      {parseInt(htmlSolved || 0) + parseInt(cssSolved || 0) + parseInt(jsSolved || 0) + parseInt(reactSolved || 0)} / 200
+                      {parseInt(htmlSolved || 0) + parseInt(cssSolved || 0) + parseInt(jsSolved || 0) + parseInt(reactSolved || 0)} / {totalErrors}
                     </strong>
                   </div>
                 </div>
@@ -343,7 +350,7 @@ export default function AdminEvaluations() {
             </form>
           ) : (
             <div className="text-center py-12 text-slate-500 text-sm">
-              No teams available for Round {selectedRound}. Create teams first.
+              No teams available for {currentRound?.name || 'this round'}. Create teams first.
             </div>
           )}
 
@@ -357,7 +364,7 @@ export default function AdminEvaluations() {
 
           {evaluations.length === 0 ? (
             <div className="text-xs text-slate-500 text-center py-8">
-              No evaluations completed yet for Round {selectedRound}.
+              No evaluations completed yet for {currentRound?.name || 'this round'}.
             </div>
           ) : (
             <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">

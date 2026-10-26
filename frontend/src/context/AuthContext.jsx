@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 
 const AuthContext = createContext();
@@ -12,12 +12,20 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState(null);
 
-  const showToast = (message, type = 'info') => {
+  const showToast = useCallback((message, type = 'info') => {
     setToastMessage({ message, type, id: Date.now() });
     setTimeout(() => {
       setToastMessage(null);
     }, 4000);
-  };
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('aarohan_token');
+    localStorage.removeItem('aarohan_user');
+    setToken(null);
+    setUser(null);
+    showToast('Logged out successfully', 'info');
+  }, [showToast]);
 
   useEffect(() => {
     const fetchMe = async () => {
@@ -34,7 +42,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     };
     fetchMe();
-  }, [token]);
+  }, [token, logout]);
 
   const studentLogin = async (arohanId, password) => {
     const res = await api.post('/auth/student-login', { arohanId, password });
@@ -58,6 +66,28 @@ export const AuthProvider = ({ children }) => {
     return userData;
   };
 
+  const branchLogin = async (username, password) => {
+    const res = await api.post('/auth/branch-login', { username, password });
+    const { token: jwtToken, user: userData } = res.data;
+    localStorage.setItem('aarohan_token', jwtToken);
+    localStorage.setItem('aarohan_user', JSON.stringify(userData));
+    setToken(jwtToken);
+    setUser(userData);
+    showToast(`Welcome to ${userData.branchName}!`, 'success');
+    return userData;
+  };
+
+  const viewerLogin = async (username, password) => {
+    const res = await api.post('/auth/viewer-login', { username, password });
+    const { token: jwtToken, user: userData } = res.data;
+    localStorage.setItem('aarohan_token', jwtToken);
+    localStorage.setItem('aarohan_user', JSON.stringify(userData));
+    setToken(jwtToken);
+    setUser(userData);
+    showToast(`Welcome, ${userData.name}!`, 'success');
+    return userData;
+  };
+
   const teamLogin = async (loginId, password, termsAccepted) => {
     const res = await api.post('/auth/team-login', { loginId, password, termsAccepted });
     const { token: jwtToken, user: userData } = res.data;
@@ -67,14 +97,6 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
     showToast(`Welcome, ${userData.loginId}!`, 'success');
     return userData;
-  };
-
-  const logout = () => {
-    localStorage.removeItem('aarohan_token');
-    localStorage.removeItem('aarohan_user');
-    setToken(null);
-    setUser(null);
-    showToast('Logged out successfully', 'info');
   };
 
   const updateUser = (data) => {
@@ -92,6 +114,8 @@ export const AuthProvider = ({ children }) => {
       loading,
       studentLogin,
       adminLogin,
+      branchLogin,
+      viewerLogin,
       teamLogin,
       logout,
       updateUser,

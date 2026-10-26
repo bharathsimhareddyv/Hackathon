@@ -14,6 +14,9 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      config.headers.delete('Content-Type');
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -29,7 +32,7 @@ api.interceptors.response.use(
       if (!path.includes('/login')) {
         localStorage.removeItem('aarohan_token');
         localStorage.removeItem('aarohan_user');
-        window.location.href = path.startsWith('/team') ? '/team-login' : path.startsWith('/admin') ? '/admin-login' : '/student-login';
+        window.location.href = path.startsWith('/branch') ? '/branch-login' : path.startsWith('/viewer') ? '/viewer-login' : path.startsWith('/team') ? '/team-login' : path.startsWith('/admin') ? '/admin-login' : '/student-login';
       }
     }
     return Promise.reject(error);

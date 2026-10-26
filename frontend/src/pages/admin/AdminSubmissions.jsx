@@ -6,6 +6,7 @@ export default function AdminSubmissions() {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedRound, setSelectedRound] = useState('');
+  const [rounds, setRounds] = useState([]);
 
   const fetchSubmissions = async () => {
     try {
@@ -20,6 +21,12 @@ export default function AdminSubmissions() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    api.get('/rounds').then(response => setRounds(response.data)).catch(error => {
+      console.error('Fetch Rounds Error:', error);
+    });
+  }, []);
 
   useEffect(() => {
     fetchSubmissions();
@@ -40,9 +47,7 @@ export default function AdminSubmissions() {
           className="px-3.5 py-2 rounded-xl glass-input text-xs font-mono font-bold"
         >
           <option value="">All Rounds</option>
-          <option value="1">Round 1 Submissions</option>
-          <option value="2">Round 2 Submissions</option>
-          <option value="3">Round 3 Submissions</option>
+          {rounds.map(round => <option key={round._id} value={round.roundNumber}>{round.name}</option>)}
         </select>
       </div>
 
@@ -70,7 +75,7 @@ export default function AdminSubmissions() {
                 {submissions.map((sub) => (
                   <tr key={sub._id} className="hover:bg-slate-900/60 transition-colors">
                     <td className="py-3 px-4 font-mono font-bold text-indigo-300">
-                      Round {sub.roundNumber}
+                      {rounds.find(round => round.roundNumber === sub.roundNumber)?.name || `Round ${sub.roundNumber}`}
                     </td>
 
                     <td className="py-3 px-4 font-mono font-bold text-cyan-300">

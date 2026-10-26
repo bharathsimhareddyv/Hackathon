@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const ProjectSchema = new mongoose.Schema({
   name: { type: String, required: true },
   roundNumber: { type: Number, required: true },
+  branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', default: null },
+  assignedBranchIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Branch' }],
   description: { type: String, default: '' },
   filePath: { type: String, default: null }, // local ZIP path
   originalFileName: { type: String, default: null },

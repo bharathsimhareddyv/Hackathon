@@ -13,4 +13,26 @@ async function nextAarohanTeamLoginId(roundNumber = 1) {
   return `${prefix}${nextNumber}`;
 }
 
-module.exports = { nextAarohanTeamLoginId };
+function sequentialTeamLoginIds(teamName, startingNumber, count) {
+  const prefix = String(teamName || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const start = Number(startingNumber);
+  const quantity = Number(count);
+
+  if (!prefix || prefix.length > 40) {
+    throw new Error('Team name must contain 1-40 letters or numbers');
+  }
+  if (!Number.isSafeInteger(start) || start < 1 || start > 999999999) {
+    throw new Error('Starting number must be an integer between 1 and 999999999');
+  }
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 200 || start + quantity - 1 > 999999999) {
+    throw new Error('Team count must be between 1 and 200 and fit within the supported number range');
+  }
+
+  return Array.from({ length: quantity }, (_, index) => `${prefix}${start + index}`);
+}
+
+module.exports = { nextAarohanTeamLoginId, sequentialTeamLoginIds };

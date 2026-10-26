@@ -73,6 +73,9 @@ export default function TeamLogin() {
             {loading ? 'Signing in…' : 'Open team workspace'} <ArrowRight className="h-4 w-4" />
           </button>
         </form>
+        <div className="mt-5 border-t border-slate-800 pt-4 text-center">
+          <Link to="/student-login" className="text-xs font-semibold text-slate-400 hover:text-cyan-300">Sign in with an Arohan student ID</Link>
+        </div>
       </section>
     </main>
   );

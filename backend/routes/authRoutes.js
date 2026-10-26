@@ -5,11 +5,14 @@ const jwt = require('jsonwebtoken');
 const Participant = require('../models/Participant');
 const Admin = require('../models/Admin');
 const TeamAccount = require('../models/TeamAccount');
+const Branch = require('../models/Branch');
+const Viewer = require('../models/Viewer');
 const Terms = require('../models/Terms');
 const TermsAcceptance = require('../models/TermsAcceptance');
 const RoundTeam = require('../models/RoundTeam');
 const OtpToken = require('../models/OtpToken');
 const { isEmailConfigured, sendMail } = require('../utils/emailService');
+const syncParticipantTerms = require('../utils/syncParticipantTerms');
 const crypto = require('crypto');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -109,14 +112,7 @@ router.post('/team-login', async (req, res) => {
         } },
         { upsert: true }
       )));
-      await Participant.updateMany(
-        { arohanId: { $in: participantIds } },
-        { $set: { termsAccepted: true, termsVersionAccepted: currentTerms.version } }
-      );
-      await Participant.updateMany(
-        { arohanId: { $in: participantIds }, status: { $in: ['REGISTERED', 'TERMS_PENDING'] } },
-        { $set: { status: 'READY' } }
-      );
+      await syncParticipantTerms(participantIds);
       team.termsAccepted = true;
       team.termsVersionAccepted = currentTerms.version;
       await team.save();
@@ -171,6 +167,53 @@ router.post('/admin-login', async (req, res) => {
   }
 });
 
+router.post('/branch-login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Branch username and password are required' });
+    }
+
+    const branch = await Branch.findOne({ username: username.trim().toLowerCase() });
+    if (!branch || !branch.loginEnabled || !(await bcrypt.compare(password, branch.passwordHash))) {
+      return res.status(401).json({ message: 'Invalid branch credentials' });
+    }
+
+    res.json({
+      token: generateToken(branch._id, 'BRANCH_ADMIN'),
+      user: {
+        id: branch._id,
+        username: branch.username,
+        branchName: branch.name,
+        role: 'BRANCH_ADMIN'
+      }
+    });
+  } catch (error) {
+    console.error('Branch Login Error:', error);
+    res.status(500).json({ message: 'Server error during branch login' });
+  }
+});
+
+router.post('/viewer-login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Viewer username and password are required' });
+    }
+    const viewer = await Viewer.findOne({ username: username.trim().toLowerCase() });
+    if (!viewer || !viewer.loginEnabled || !(await bcrypt.compare(password, viewer.passwordHash))) {
+      return res.status(401).json({ message: 'Invalid viewer credentials' });
+    }
+    res.json({
+      token: generateToken(viewer._id, 'VIEWER'),
+      user: { id: viewer._id, username: viewer.username, name: viewer.name, role: 'VIEWER' }
+    });
+  } catch (error) {
+    console.error('Viewer Login Error:', error);
+    res.status(500).json({ message: 'Server error during viewer login' });
+  }
+});
+
 // @route GET /api/auth/me
 router.get('/me', protect, async (req, res) => {
   if (!req.user) return res.status(401).json({ message: 'Not authorized' });
@@ -207,6 +250,28 @@ router.get('/me', protect, async (req, res) => {
         role: 'TEAM',
         currentRound: req.user.currentRound,
         status: req.user.status
+      }
+    });
+  }
+
+  if (req.user.role === 'BRANCH_ADMIN') {
+    return res.json({
+      user: {
+        id: req.user._id,
+        username: req.user.username,
+        branchName: req.user.name,
+        role: 'BRANCH_ADMIN'
+      }
+    });
+  }
+
+  if (req.user.role === 'VIEWER') {
+    return res.json({
+      user: {
+        id: req.user._id,
+        username: req.user.username,
+        name: req.user.name,
+        role: 'VIEWER'
       }
     });
   }
@@ -253,6 +318,22 @@ router.post('/change-password', protect, async (req, res) => {
       team.temporaryPasswordPlain = null;
       await team.save();
       return res.json({ message: 'Team password updated successfully' });
+    } else if (req.user.role === 'BRANCH_ADMIN') {
+      const branch = await Branch.findById(req.user._id);
+      if (!branch || !(await bcrypt.compare(currentPassword, branch.passwordHash))) {
+        return res.status(400).json({ message: 'Current password incorrect' });
+      }
+      branch.passwordHash = await bcrypt.hash(newPassword, 10);
+      await branch.save();
+      return res.json({ message: 'Branch password updated successfully' });
+    } else if (req.user.role === 'VIEWER') {
+      const viewer = await Viewer.findById(req.user._id);
+      if (!viewer || !(await bcrypt.compare(currentPassword, viewer.passwordHash))) {
+        return res.status(400).json({ message: 'Current password incorrect' });
+      }
+      viewer.passwordHash = await bcrypt.hash(newPassword, 10);
+      await viewer.save();
+      return res.json({ message: 'Viewer password updated successfully' });
     } else {
       const admin = await Admin.findById(req.user._id);
       const isMatch = await bcrypt.compare(currentPassword, admin.passwordHash);

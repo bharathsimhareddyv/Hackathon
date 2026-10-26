@@ -16,8 +16,8 @@ The platform provides complete manual control to the **ADMIN / ORGANIZERS** to o
 4. **Round Management & Server Timing**: Dynamic schedule configuration, countdown timers, and controls (Start, Pause, Close, Extend).
 5. **Round-Specific Team Formation**: Independent team composition for each round (**Teams are NOT permanent**).
 6. **Project & File Distribution**: Admin project ZIP uploads and student download tracking logs.
-7. **Debugging Progress & Manual Evaluation**: Dedicated marksheets for error counts (HTML, CSS, JS, React), total marks (e.g. 82/100), remarks, and qualification overrides.
-8. **GitHub Repository Integration**: Round 2 & 3 repo cloning workflows and commit SHA submissions.
+7. **Progress & Manual Evaluation**: Round-specific marks, optional challenge breakdowns, remarks, and qualification overrides.
+8. **GitHub Repository Integration**: Optional repository URLs, commit SHA submissions, and ZIP uploads for any configured round.
 9. **Leaderboard & Reports**: Real-time multi-round score breakdown and CSV exports for participants, evaluations, and activity logs.
 
 ---
@@ -27,7 +27,7 @@ The platform provides complete manual control to the **ADMIN / ORGANIZERS** to o
 ### **Backend**
 * **Node.js** (v24+) & **Express.js**
 * **MongoDB** & **Mongoose** (Running locally on `mongodb://localhost:27017/aarohan_db`)
-* **JWT (JSON Web Tokens)** for role-based authentication (`ADMIN` and `STUDENT`)
+* **JWT (JSON Web Tokens)** for role-based authentication (`ADMIN`, `BRANCH_ADMIN`, `VIEWER`, `TEAM`, and `STUDENT`)
 * **bcryptjs** for secure password hashing
 * **Multer + Cloudinary** for hosted project ZIPs, team evidence, submissions, and program branding uploads
 
@@ -53,6 +53,7 @@ Hackathon/
 │   │   └── uploadMiddleware.js
 │   ├── models/
 │   │   ├── Admin.js
+│   │   ├── Viewer.js
 │   │   ├── Participant.js
 │   │   ├── Round.js
 │   │   ├── RoundTeam.js
@@ -66,6 +67,7 @@ Hackathon/
 │   │   └── ActivityLog.js
 │   ├── routes/
 │   │   ├── authRoutes.js
+│   │   ├── viewerRoutes.js
 │   │   ├── participantRoutes.js
 │   │   ├── roundRoutes.js
 │   │   ├── teamRoutes.js
@@ -78,7 +80,6 @@ Hackathon/
 │   │   ├── leaderboardRoutes.js
 │   │   ├── activityLogRoutes.js
 │   │   ├── settingsRoutes.js
-│   │   └── demoRoutes.js
 │   ├── utils/
 │   │   ├── passwordGenerator.js
 │   │   └── sampleDataSeeder.js
@@ -139,11 +140,11 @@ cd backend
 npm install
 ```
 
-Create/verify `backend/.env`:
+Copy `backend/.env.example` to `backend/.env`, then fill in your local values:
 ```env
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/aarohan_db
-JWT_SECRET=aarohan_hackathon_super_secret_jwt_token_key_2026_tribal_students
+JWT_SECRET=replace_with_a_long_random_secret
 NODE_ENV=development
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
@@ -157,13 +158,15 @@ MAIL_REPLY_TO=your-inbox@gmail.com
 ADMIN_PASSWORD_OTP_EMAIL=bharathsimhareddyv19@gmail.com
 ```
 
-Cloudinary credentials are required for hosted project ZIPs, progress evidence, and the AAROHAN logo. Gmail API OAuth credentials are required for bulk team invitations and email-verified admin password changes. Enable the Gmail API in Google Cloud, create an OAuth client, and generate a refresh token with the `https://www.googleapis.com/auth/gmail.send` scope. The OAuth consent screen must be configured for the sending account; refresh tokens for an External app left in Testing can expire after seven days. Set these values in the backend environment and never commit real credentials.
+Before uploading a project ZIP archive, set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in `backend/.env` using credentials from your Cloudinary account, then restart the backend. ZIP archives are uploaded to Cloudinary as raw files. These credentials are also required for progress evidence and the AAROHAN logo. Never put Cloudinary credentials in frontend settings or commit them to source control.
+
+Gmail API OAuth credentials are required for bulk team invitations and email-verified admin password changes. Enable the Gmail API in Google Cloud, create an OAuth client, and generate a refresh token with the `https://www.googleapis.com/auth/gmail.send` scope. The OAuth consent screen must be configured for the sending account; refresh tokens for an External app left in Testing can expire after seven days. Set these values in the backend environment and never commit real credentials.
 
 Start backend server:
 ```bash
 npm start
 ```
-*The server will automatically connect to MongoDB and seed the default Admin credentials & initial rounds.*
+*The server connects to MongoDB and ensures the default Admin, terms, and settings exist. Rounds are created by admins or branch owners; no rounds are seeded automatically.*
 
 ### 2. Frontend Setup
 
@@ -184,15 +187,11 @@ Open browser at `http://localhost:3000` (or the Vite dev URL displayed).
 * **Username**: `admin`
 * **Password**: `admin123`
 
-Create team credentials and send welcome messages from **Admin → Team Accounts**. Teams sign in at `/team-login`; organizers can create additional rounds, review progress approvals, and create co-admin accounts from the admin navigation.
+Create team credentials and send welcome messages from **Admin → Team Accounts**. For custom team IDs, enter a team name and starting number (for example, `Team Alpha` and `1` generates `team-alpha1`, `team-alpha2`, and so on); leave the name blank to keep automatic Aarohan IDs.
 
-### **Demo Student Login**
-Click **SEED DEMO MODE** inside the Admin Portal sidebar to generate 5 test Arohan IDs:
-* **AIF260001** / Pass: `Ar@26K7p`
-* **AIF260002** / Pass: `Tr#81Lm2`
-* **AIF260003** / Pass: `Ax@92Qw8`
-* **AIF260004** / Pass: `Nx$45Zp1`
-* **AIF260005** / Pass: `Px!67Mw9`
+Organizers can create branch-specific logins from **Admin → Branch Sections**. Branch users sign in at `/branch-login` and can generate student IDs and team IDs, assign only their own students to teams, create branch-only rounds, and review submissions. Admin-created rounds and projects stay hidden until explicitly assigned in **Admin → Rounds & Timings** and **Admin → Projects**. Branch owners can download team ZIP submissions, approve submissions with optional official marks, and qualify teams; admins can subsequently edit marks and qualification in **Admin → Evaluations & Marks**. The branch portal includes its own round/all-round leaderboard; the admin/public leaderboard supports round-specific and all-round views. Branch owners can edit student names and team IDs, view temporary passwords, reset credentials, and disable logins while retaining historical results. Student dashboards show the participant name and Aarohan ID. **Admin → Branch Sections** provides a detailed report and CSV export for each branch, while admins retain global access. Disabling a branch login preserves the branch record and all its data. Co-admin accounts remain available from **Admin → Admin Accounts**.
+
+Organizers can create named, read-only viewer accounts from **Admin → Viewer Access**. Each viewer can be assigned specific rounds, all branches or selected branches, and independent permissions for round/team progress, branch statistics, and branch averages. Viewer users sign in at `/viewer-login`; their dashboard shows assigned round status, student names and Aarohan IDs, branch attribution, submissions, evaluations, branch comparison graphs, and per-round averages only when permitted. Administrators can edit access at any time, reset passwords, or disable a viewer login without deleting its settings.
 
 ---
 
@@ -206,12 +205,11 @@ Click **SEED DEMO MODE** inside the Admin Portal sidebar to generate 5 test Aroh
 5. Go to **Credentials** tab and click **[GENERATE PASSWORDS]**.
 6. Click **[EXPORT CREDENTIALS CSV]** to print/distribute credential slips to students.
 
-### Step 2: Configure Round 1 & Upload Projects
-1. Go to **Projects** tab.
-2. Select **Round 1 (Debugging Challenge)**. Upload `Round1_Debugging_Project.zip` containing HTML/CSS/JS/React subfolders.
-3. Configure total error counts (200 errors: HTML 50, CSS 50, JS 50, React 50).
-4. Go to **Round Teams** tab. Select participants for Round 1 (e.g. `AIF260001` + `AIF260002` → `ROUND1-T001`).
-5. Go to **Rounds & Timings** tab. Set Start Time and End Time. Click **[START ROUND]**.
+### Step 2: Create and assign event rounds
+1. Open **Rounds & Timings** and create rounds using the names, challenge types, times, qualification criteria, and branch assignments required for your event.
+2. Branch owners can also create branch-specific rounds from their branch workspace.
+3. Create project sources under **Projects** and assign them to the relevant round and branches.
+4. Create round teams from **Team Assignments** or from the branch workspace.
 
 ### Step 3: Student Work & Project Download
 1. Students log into `/student-login` using their Arohan ID and password.
@@ -220,18 +218,10 @@ Click **SEED DEMO MODE** inside the Admin Portal sidebar to generate 5 test Aroh
 4. Students extract the ZIP on their machines and debug code in VS Code.
 5. Students upload their work/ZIP or repo link on the dashboard.
 
-### Step 4: Admin Evaluation & Qualification
-1. When Round 1 ends, Admin opens **Evaluations & Marks** tab.
-2. Select team (`ROUND1-T001`).
-3. Enter errors solved (e.g. HTML: 35/50, CSS: 32/50, JS: 38/50, React: 32/50 → Total: 137/200).
-4. Enter marks (82/100) and remarks. Select status **[QUALIFIED]** and click **[SAVE EVALUATION]**.
-5. The platform automatically marks team members as qualified and unlocks Round 2!
-
-### Step 5: Round 2 & Round 3 Re-shuffling
-1. Go to **Round Teams** tab and switch to **ROUND 2 TEAMS**.
-2. Select qualified Round 1 participants and form **NEW Round 2 Teams** (e.g. `AIF260001` + `AIF260005` → `ROUND2-T001`).
-3. Repeat process for Round 2 (React / GitHub Challenge) and Round 3 (Final Application Challenge).
-4. View the live **Leaderboard** and export final CSV reports from **Reports & Export** tab.
+### Step 4: Evaluate and report
+1. Select a configured round in **Evaluations & Marks** and enter team marks, remarks, and qualification decisions.
+2. Qualified participants can be assigned to teams in any later configured round.
+3. View the live **Leaderboard** and export per-round CSV reports from **Reports & Export**.
 
 ---
 

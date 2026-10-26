@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const RoundTeamSchema = new mongoose.Schema({
   roundNumber: { type: Number, required: true },
+  branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', default: null },
   teamCode: { type: String, required: true },
   teamAccountId: { type: mongoose.Schema.Types.ObjectId, ref: 'TeamAccount', default: null },
   memberNames: [{ type: String, trim: true }],

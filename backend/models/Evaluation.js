@@ -6,15 +6,15 @@ const EvaluationSchema = new mongoose.Schema({
   teamCode: { type: String, required: true },
   participantIds: [{ type: String }],
   
-  // Debugging fields (Round 1)
-  totalErrors: { type: Number, default: 200 },
+  // Optional debugging-task breakdown, populated only when used by a round.
+  totalErrors: { type: Number, default: 0 },
   errorsSolved: { type: Number, default: 0 },
   htmlSolved: { type: Number, default: 0 },
   cssSolved: { type: Number, default: 0 },
   jsSolved: { type: Number, default: 0 },
   reactSolved: { type: Number, default: 0 },
   
-  // Generic / Round 2 / Round 3 breakdown fields
+  // Generic rubric breakdown fields.
   tasksCompleted: { type: Number, default: 0 },
   maxTasks: { type: Number, default: 10 },
   codeQuality: { type: Number, default: 0 }, // max 10/20

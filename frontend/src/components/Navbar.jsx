@@ -52,11 +52,11 @@ export default function Navbar() {
           {user ? (
             <div className="flex items-center gap-3">
               <Link
-                to={user.role === 'ADMIN' ? '/admin/dashboard' : user.role === 'TEAM' ? '/team/dashboard' : '/student/dashboard'}
+                to={user.role === 'ADMIN' ? '/admin/dashboard' : user.role === 'BRANCH_ADMIN' ? '/branch/dashboard' : user.role === 'TEAM' ? '/team/dashboard' : '/student/dashboard'}
                 className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-indigo-950/70 border border-indigo-500/40 text-indigo-200 text-sm font-semibold hover:bg-indigo-900/80 transition-all shadow-md"
               >
                 <LayoutDashboard className="w-4 h-4 text-cyan-400" />
-                <span>{user.role === 'ADMIN' ? 'Admin Portal' : user.role === 'TEAM' ? user.loginId : user.arohanId}</span>
+                <span>{user.role === 'ADMIN' ? 'Admin Portal' : user.role === 'BRANCH_ADMIN' ? user.branchName : user.role === 'TEAM' ? user.loginId : user.arohanId}</span>
               </Link>
               <button
                 onClick={handleLogout}
@@ -76,6 +76,7 @@ export default function Navbar() {
                 <Code2 className="w-4 h-4" />
                 TEAM LOGIN
               </Link>
+              <Link to="/student-login" className="hidden px-3 py-2 text-xs font-semibold text-slate-300 hover:text-cyan-300 sm:inline-flex">STUDENT LOGIN</Link>
             </div>
           )}
         </div>

@@ -6,18 +6,38 @@ const Settings = require('../models/Settings');
 const { protect } = require('../middleware/authMiddleware');
 
 // @route GET /api/leaderboard
-router.get('/', async (req, res) => {
+router.get('/', (req, res, next) => {
+  if (req.headers.authorization?.startsWith('Bearer')) {
+    return protect(req, res, next);
+  }
+  return next();
+}, async (req, res) => {
   try {
     const settings = await Settings.findOne() || { leaderboardPublic: true };
+    const selectedRound = req.query.roundNumber;
+    if (selectedRound && selectedRound !== 'all' &&
+        (!Number.isInteger(Number(selectedRound)) || Number(selectedRound) < 1)) {
+      return res.status(400).json({ message: 'Choose a valid round number' });
+    }
     
     // If private and user not logged in or not admin, return standard message
-    if (!settings.leaderboardPublic && (!req.headers.authorization || !req.headers.authorization.startsWith('Bearer'))) {
+    if (!settings.leaderboardPublic && req.user?.role !== 'ADMIN') {
       return res.json({ public: false, leaderboard: [], message: 'Leaderboard is currently hidden by Admin.' });
     }
 
+    const evaluationFilter = {};
+    const roundQuery = {};
+    if (selectedRound && selectedRound !== 'all') {
+      evaluationFilter.roundNumber = Number(selectedRound);
+      roundQuery.roundNumber = Number(selectedRound);
+    }
     const [evaluations, rounds] = await Promise.all([
-      Evaluation.find().populate('teamId'),
-      Round.find().select('roundNumber name maxMarks').sort({ roundNumber: 1 })
+      Evaluation.find(evaluationFilter).populate({
+        path: 'teamId',
+        select: 'teamCode branchId teamAccountId',
+        populate: { path: 'branchId', select: 'name' }
+      }),
+      Round.find(roundQuery).select('roundNumber name maxMarks').sort({ roundNumber: 1 })
     ]);
 
     // Aggregate by participant or team across rounds
@@ -26,20 +46,17 @@ router.get('/', async (req, res) => {
 
     evaluations.forEach(ev => {
       const participants = [...new Set(ev.participantIds || [])].sort();
-      const key = participants.length ? participants.join('|') : (ev.teamCode || String(ev.teamId?._id || ev.teamId));
+      const key = ev.teamId?.teamAccountId
+        ? String(ev.teamId.teamAccountId)
+        : participants.length ? participants.join('|') : (ev.teamCode || String(ev.teamId?._id || ev.teamId));
       if (!leaderboardMap[key]) {
         leaderboardMap[key] = {
           teamCode: ev.teamCode,
+          ...(req.user?.role === 'ADMIN' ? { branchName: ev.teamId?.branchId?.name || '—' } : {}),
           participants,
           roundScores: {},
-          round1Marks: 0,
-          round2Marks: 0,
-          round3Marks: 0,
           totalMarks: 0,
           totalMaxMarks: 0,
-          round1Status: 'NOT_EVALUATED',
-          round2Status: 'NOT_EVALUATED',
-          round3Status: 'NOT_EVALUATED',
           finalStatus: ev.status,
           latestRound: 0
         };
@@ -54,19 +71,9 @@ router.get('/', async (req, res) => {
       if (ev.roundNumber >= item.latestRound) {
         item.latestRound = ev.roundNumber;
         item.teamCode = ev.teamCode;
+        if (req.user?.role === 'ADMIN') item.branchName = ev.teamId?.branchId?.name || '—';
         item.finalStatus = ev.status;
       }
-      if (ev.roundNumber === 1) {
-        item.round1Marks = ev.marks;
-        item.round1Status = ev.status;
-      } else if (ev.roundNumber === 2) {
-        item.round2Marks = ev.marks;
-        item.round2Status = ev.status;
-      } else if (ev.roundNumber === 3) {
-        item.round3Marks = ev.marks;
-        item.round3Status = ev.status;
-      }
-
       item.totalMarks = Object.values(item.roundScores).reduce((total, score) => total + (Number(score.marks) || 0), 0);
       item.totalMaxMarks = Object.values(item.roundScores).reduce((total, score) => total + (Number(score.maxMarks) || 0), 0);
     });

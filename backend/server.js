@@ -29,6 +29,9 @@ app.use('/api/rounds', require('./routes/roundRoutes'));
 app.use('/api/admin/teams', require('./routes/teamRoutes'));
 app.use('/api/admin/team-accounts', require('./routes/teamAccountRoutes'));
 app.use('/api/admin/accounts', require('./routes/adminAccountRoutes'));
+app.use('/api/admin/branches', require('./routes/branchRoutes'));
+app.use('/api/viewers', require('./routes/viewerRoutes'));
+app.use('/api/branch', require('./routes/branchPortalRoutes'));
 app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/progress-claims', require('./routes/progressClaimRoutes'));
 app.use('/api/admin/evaluations', require('./routes/evaluationRoutes'));
@@ -39,7 +42,6 @@ app.use('/api/admin/export', require('./routes/exportRoutes'));
 app.use('/api/leaderboard', require('./routes/leaderboardRoutes'));
 app.use('/api/admin/activity-logs', require('./routes/activityLogRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
-app.use('/api/admin/demo', require('./routes/demoRoutes'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

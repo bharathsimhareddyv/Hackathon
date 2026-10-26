@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const ParticipantSchema = new mongoose.Schema({
   arohanId: { type: String, required: true, unique: true, uppercase: true, trim: true },
+  branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', default: null },
   passwordHash: { type: String, required: true },
   temporaryPasswordPlain: { type: String, default: null }, // Only viewable by Admin before first change if needed
   name: { type: String, default: null },

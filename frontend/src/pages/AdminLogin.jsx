@@ -122,6 +122,10 @@ export default function AdminLogin() {
             >
               <span>Back to Team Login</span>
             </Link>
+            <span className="mx-2 text-slate-700">·</span>
+            <Link to="/branch-login" className="text-xs font-semibold text-slate-400 hover:text-white transition-colors">
+              Branch login
+            </Link>
           </div>
 
         </div>

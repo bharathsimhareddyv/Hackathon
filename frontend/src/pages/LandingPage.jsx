@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Terminal, Shield, Code2, Bug, GitBranch, Cpu, Trophy, CheckCircle2, ArrowRight, BookOpen, Clock, Users, HelpCircle, Sparkles } from 'lucide-react';
+import { Terminal, Shield, Code2, Trophy, ArrowRight, BookOpen, Users, Sparkles, Bug, GitBranch } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
@@ -65,7 +65,15 @@ export default function LandingPage() {
               <span>TEAM LOGIN</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Link>
-
+            <Link to="/branch-login" className="text-xs font-semibold text-slate-400 hover:text-emerald-300 transition-colors">
+              Branch administrator login
+            </Link>
+            <Link to="/viewer-login" className="text-xs font-semibold text-slate-400 hover:text-cyan-300 transition-colors">
+              Viewer login
+            </Link>
+            <Link to="/student-login" className="text-xs font-semibold text-slate-400 hover:text-cyan-300 transition-colors">
+              Student login
+            </Link>
           </div>
 
           {/* Key Stat Cards */}
@@ -84,8 +92,8 @@ export default function LandingPage() {
 
             <div className="glass-card p-5 rounded-2xl text-center">
               <GitBranch className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-white font-outfit">3 Rounds</div>
-              <div className="text-xs text-slate-400 font-medium">Progressive Evaluation</div>
+              <div className="text-2xl font-bold text-white font-outfit">Flexible</div>
+              <div className="text-xs text-slate-400 font-medium">Organizer-defined rounds</div>
             </div>
 
             <div className="glass-card p-5 rounded-2xl text-center">
@@ -152,72 +160,16 @@ export default function LandingPage() {
               THE HACKATHON JOURNEY
             </h2>
             <p className="mt-4 text-slate-400 text-base">
-              Three progressive stages designed to test debugging precision, React repository building, and real-world application delivery.
+              Organizers define the round names, schedules, projects, and evaluation criteria to fit their event.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 relative">
-            
-            {/* Round 1 */}
-            <div className="glass-card p-6 rounded-2xl relative border-t-4 border-t-cyan-500">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 bg-cyan-950 px-3 py-1 rounded-full border border-cyan-800">
-                  ROUND 1
-                </span>
-                <Bug className="w-6 h-6 text-cyan-400" />
-              </div>
-              <h3 className="text-2xl font-bold text-white font-outfit mb-2">DEBUGGING CHALLENGE</h3>
-              <p className="text-slate-400 text-sm mb-6">
-                Inspect 200 code tasks across HTML, CSS, JavaScript, and React. Extract ZIP locally, solve bugs, and submit for evaluation.
-              </p>
-              <ul className="space-y-2 text-xs text-slate-300">
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-cyan-400" /> 50 HTML Debugging Tasks</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-cyan-400" /> 50 CSS Styling Tasks</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-cyan-400" /> 50 JavaScript Logic Tasks</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-cyan-400" /> 50 React State/Prop Tasks</li>
-              </ul>
-            </div>
-
-            {/* Round 2 */}
-            <div className="glass-card p-6 rounded-2xl relative border-t-4 border-t-indigo-500">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950 px-3 py-1 rounded-full border border-indigo-800">
-                  ROUND 2
-                </span>
-                <GitBranch className="w-6 h-6 text-indigo-400" />
-              </div>
-              <h3 className="text-2xl font-bold text-white font-outfit mb-2">REACT / GITHUB CHALLENGE</h3>
-              <p className="text-slate-400 text-sm mb-6">
-                Qualified hackers get new teams! Clone assigned GitHub repository, add components, run `npm dev`, and submit commit SHA.
-              </p>
-              <ul className="space-y-2 text-xs text-slate-300">
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> GitHub Repository Cloning</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> React Component Architecture</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> State Management & APIs</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> Clean Git Commit Submission</li>
-              </ul>
-            </div>
-
-            {/* Round 3 */}
-            <div className="glass-card p-6 rounded-2xl relative border-t-4 border-t-emerald-500">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950 px-3 py-1 rounded-full border border-emerald-800">
-                  ROUND 3
-                </span>
-                <Cpu className="w-6 h-6 text-emerald-400" />
-              </div>
-              <h3 className="text-2xl font-bold text-white font-outfit mb-2">APPLICATION CHALLENGE</h3>
-              <p className="text-slate-400 text-sm mb-6">
-                The ultimate final round. Build a complete end-to-end full stack web application tackling tribal welfare problems.
-              </p>
-              <ul className="space-y-2 text-xs text-slate-300">
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Full Stack MERN Solution</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Real-time Data Integration</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Multi-criteria Jury Evaluation</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Final Leaderboard Ranking</li>
-              </ul>
-            </div>
-
+          <div className="glass-card mx-auto max-w-3xl rounded-2xl border border-cyan-500/20 p-8 text-center">
+            <h3 className="font-outfit text-2xl font-bold text-white">Built around your event</h3>
+            <p className="mt-3 text-sm leading-relaxed text-slate-400">
+              Admins and branch owners create rounds with their own names, timing, challenge type, projects, and qualification rules. Participants see only the rounds assigned to their branch.
+            </p>
+            <Link to="/admin-login" className="mt-6 inline-flex rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-indigo-500">Configure event rounds</Link>
           </div>
         </div>
       </section>

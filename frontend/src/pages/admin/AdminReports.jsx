@@ -1,10 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { FileSpreadsheet, Download, Users, Award, History } from 'lucide-react';
 
 export default function AdminReports() {
   const { showToast } = useAuth();
+  const [rounds, setRounds] = useState([]);
+
+  useEffect(() => {
+    api.get('/rounds').then(response => setRounds(response.data)).catch(error => {
+      showToast(error.response?.data?.message || 'Could not load rounds for export', 'error');
+    });
+  }, [showToast]);
 
   const downloadReport = async (endpoint, fileName) => {
     try {
@@ -55,45 +62,15 @@ export default function AdminReports() {
           </button>
         </div>
 
-        {/* Round 1 Evaluations */}
-        <div className="glass-panel p-6 rounded-3xl space-y-4 border-cyan-500/20">
+        {rounds.map(round => <div key={round._id} className="glass-panel space-y-4 rounded-3xl border border-cyan-500/20 p-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-700/50 flex items-center justify-center">
-              <Award className="w-5 h-5 text-cyan-400" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white font-outfit">Round 1 Debugging Marks Report</h2>
-              <p className="text-xs text-slate-400">Export Round 1 error breakdown (HTML, CSS, JS, React), marks, and qualification state.</p>
-            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950"><Award className="h-5 w-5 text-cyan-400" /></div>
+            <div><h2 className="font-outfit text-base font-bold text-white">{round.name}</h2><p className="text-xs text-slate-400">Export evaluation marks, participant IDs, and qualification status for this round.</p></div>
           </div>
-          <button
-            onClick={() => downloadReport('/admin/export/evaluations/1', 'aarohan_round1_evaluations.csv')}
-            className="w-full py-2.5 px-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-2 transition-all"
-          >
-            <Download className="w-4 h-4" />
-            <span>EXPORT ROUND 1 EVALUATIONS CSV</span>
+          <button onClick={() => downloadReport(`/admin/export/evaluations/${round.roundNumber}`, `aarohan_${round.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_evaluations.csv`)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 py-2.5 text-xs font-bold text-white transition-all hover:bg-cyan-600">
+            <Download className="h-4 w-4" /><span>EXPORT EVALUATIONS CSV</span>
           </button>
-        </div>
-
-        {/* Round 2 Evaluations */}
-        <div className="glass-panel p-6 rounded-3xl space-y-4 border-indigo-500/20">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-950 border border-indigo-700/50 flex items-center justify-center">
-              <Award className="w-5 h-5 text-indigo-400" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white font-outfit">Round 2 React/GitHub Marks Report</h2>
-              <p className="text-xs text-slate-400">Export Round 2 repository scores, code quality ratings, and Round 3 qualification list.</p>
-            </div>
-          </div>
-          <button
-            onClick={() => downloadReport('/admin/export/evaluations/2', 'aarohan_round2_evaluations.csv')}
-            className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all"
-          >
-            <Download className="w-4 h-4" />
-            <span>EXPORT ROUND 2 EVALUATIONS CSV</span>
-          </button>
-        </div>
+        </div>)}
 
         {/* Activity Logs */}
         <div className="glass-panel p-6 rounded-3xl space-y-4 border-emerald-500/20">

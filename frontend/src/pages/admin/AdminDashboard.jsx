@@ -4,7 +4,7 @@ import api from '../../utils/api';
 import CountdownTimer from '../../components/CountdownTimer';
 import StatusBadge from '../../components/StatusBadge';
 import { useAuth } from '../../context/AuthContext';
-import { Users, UserCheck, Play, Pause, Square, RotateCcw, Clock, Award, FolderGit2, UploadCloud, History, KeyRound, Sparkles } from 'lucide-react';
+import { Users, Play, Pause, Square, RotateCcw, UploadCloud, History, KeyRound } from 'lucide-react';
 
 export default function AdminDashboard() {
   const [data, setData] = useState(null);
@@ -49,7 +49,7 @@ export default function AdminDashboard() {
     );
   }
 
-  const { summary, rounds, activeRound, recentActivityLogs } = data || {};
+  const { summary, rounds, roundStats, activeRound, recentActivityLogs } = data || {};
 
   return (
     <div className="space-y-8">
@@ -79,7 +79,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* SUMMARY STAT CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         
         <div className="glass-card p-5 rounded-2xl">
           <div className="flex items-center justify-between text-slate-400 mb-2">
@@ -99,36 +99,23 @@ export default function AdminDashboard() {
           <Link to="/admin/progress-claims" className="text-[11px] text-cyan-300 font-medium mt-1 inline-block">Review progress claims</Link>
         </div>
 
-        <div className="glass-card p-5 rounded-2xl">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase font-mono">Round 1 Teams</span>
-            <UserCheck className="w-4 h-4 text-indigo-400" />
-          </div>
-          <div className="text-3xl font-extrabold text-indigo-300 font-outfit">{summary?.round1Teams || 0}</div>
-          <div className="text-[11px] text-slate-400 font-medium mt-1">
-            <strong className="text-emerald-400">{summary?.round1Qualified || 0}</strong> Qualified | <strong className="text-rose-400">{summary?.round1NotQualified || 0}</strong> Unqualified
-          </div>
-        </div>
-
-        <div className="glass-card p-5 rounded-2xl">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase font-mono">Round 2 Teams</span>
-            <FolderGit2 className="w-4 h-4 text-indigo-400" />
-          </div>
-          <div className="text-3xl font-extrabold text-cyan-300 font-outfit">{summary?.round2Teams || 0}</div>
-          <div className="text-[11px] text-emerald-400 font-medium mt-1">{summary?.round2Qualified || 0} Qualified</div>
-        </div>
-
-        <div className="glass-card p-5 rounded-2xl">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase font-mono">Round 3 Submissions</span>
-            <UploadCloud className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-3xl font-extrabold text-emerald-400 font-outfit">{summary?.finalSubmissions || 0}</div>
-          <div className="text-[11px] text-slate-400 font-medium mt-1">{summary?.round3Teams || 0} Final Teams</div>
-        </div>
-
       </div>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {roundStats?.map(round => <article key={round.roundNumber} className="glass-card rounded-2xl border border-slate-800 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div><p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300">Round {round.roundNumber} · {round.status}</p><h2 className="mt-1 font-outfit text-lg font-bold text-white">{round.name}</h2></div>
+            <Users className="h-4 w-4 text-indigo-300" />
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+            <p className="text-slate-400">Teams <strong className="ml-1 text-white">{round.teams}</strong></p>
+            <p className="text-slate-400">Submissions <strong className="ml-1 text-white">{round.submissions}</strong></p>
+            <p className="text-slate-400">Evaluated <strong className="ml-1 text-white">{round.evaluations}</strong></p>
+            <p className="text-slate-400">Qualified <strong className="ml-1 text-emerald-300">{round.qualifiedTeams}</strong></p>
+          </div>
+        </article>)}
+        {!roundStats?.length && <p className="col-span-full rounded-2xl border border-slate-800 p-5 text-sm text-slate-400">No rounds have been created. Create a round in Round Management to start configuring the event.</p>}
+      </section>
 
       {/* LIVE ROUND MONITORING CARD */}
       <div className="glass-panel p-6 sm:p-8 rounded-3xl border-indigo-500/30">
@@ -155,9 +142,6 @@ export default function AdminDashboard() {
             <div key={r._id} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
-                    ROUND {r.roundNumber}
-                  </span>
                   <span className="font-bold text-white text-sm font-outfit">{r.name}</span>
                   <StatusBadge status={r.status} />
                 </div>

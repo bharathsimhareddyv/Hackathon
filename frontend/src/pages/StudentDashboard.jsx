@@ -113,7 +113,7 @@ export default function StudentDashboard() {
     );
   }
 
-  const { participant, rounds, activeRound, currentTeam, currentProject, currentEvaluation, mySubmissions } = data || {};
+  const { participant, rounds, activeRound, currentTeam, currentProject, currentEvaluation, mySubmissions, personalStats } = data || {};
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0B0F19]">
@@ -135,10 +135,10 @@ export default function StudentDashboard() {
             
             {/* Display Arohan ID - NO fake student name! */}
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white font-outfit tracking-tight">
-              Welcome, <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-indigo-300 to-emerald-400 font-mono">{participant?.arohanId}</span>
+              Welcome, <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-indigo-300 to-emerald-400">{participant?.name || participant?.arohanId}</span>
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              Current Hackathon Stage: <strong className="text-slate-200">Round {participant?.currentRound}</strong>
+              Student ID: <strong className="font-mono text-slate-200">{participant?.arohanId}</strong> · Current Hackathon Stage: <strong className="text-slate-200">{activeRound?.name || 'No round assigned'}</strong>
             </p>
           </div>
 
@@ -150,13 +150,27 @@ export default function StudentDashboard() {
           )}
         </div>
 
+        <section aria-label="My statistics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {[
+            ['Rounds assigned', personalStats?.assignedRounds ?? 0],
+            ['Submissions', personalStats?.totalSubmissions ?? 0],
+            ['Evaluations', personalStats?.evaluatedRounds ?? 0],
+            ['Total marks', personalStats?.totalMarks ?? 0],
+            ['Average marks', personalStats?.averageMarks ?? 0]
+          ].map(([label, value]) => <div key={label} className="glass-panel rounded-2xl border border-slate-800 p-4">
+            <p className="text-[11px] uppercase tracking-widest text-slate-400">{label} · personal</p>
+            <p className="mt-2 font-outfit text-2xl font-extrabold text-white">{value}</p>
+          </div>)}
+        </section>
+
         {/* HACKATHON JOURNEY STEPPER */}
         <div className="glass-panel p-6 rounded-3xl">
           <h2 className="text-sm font-extrabold text-slate-300 uppercase tracking-widest mb-6 font-outfit">
             HACKATHON JOURNEY STEPS
           </h2>
 
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {!rounds?.length && <p className="text-sm text-slate-400">No rounds have been assigned to your student ID yet. Contact your branch owner.</p>}
             {rounds && rounds.map((r) => {
               const isCurrent = participant?.currentRound === r.roundNumber;
               const isPast = participant?.currentRound > r.roundNumber;
@@ -173,7 +187,7 @@ export default function StudentDashboard() {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-bold font-mono px-2.5 py-0.5 rounded bg-slate-950 border border-slate-700 text-slate-300">
-                      ROUND {r.roundNumber}
+                      {r.name}
                     </span>
                     <StatusBadge status={isCurrent ? r.status : (isPast ? 'COMPLETED' : 'CLOSED')} />
                   </div>
@@ -208,7 +222,7 @@ export default function StudentDashboard() {
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
                   <div>
                     <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest block mb-1 font-mono">
-                      ASSIGNED WORKSPACE — ROUND {activeRound.roundNumber}
+                      ASSIGNED WORKSPACE — {activeRound.name}
                     </span>
                     <h2 className="text-2xl font-bold text-white font-outfit">{activeRound.name}</h2>
                   </div>
@@ -226,7 +240,7 @@ export default function StudentDashboard() {
                 {currentTeam && currentTeam.participantIds && (
                   <div className="mb-6 p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between">
                     <div className="text-xs text-slate-400">
-                      Team Teammates for Round {activeRound.roundNumber}:
+                      Team Teammates · {activeRound.name}:
                     </div>
                     <div className="flex items-center gap-2">
                       {currentTeam.participantIds.map(pid => (
@@ -272,11 +286,11 @@ export default function StudentDashboard() {
                 ) : (
                   <div className="p-6 rounded-2xl bg-amber-950/30 border border-amber-800/40 text-amber-300 text-sm mb-6 flex items-center gap-3">
                     <span>⚠️</span>
-                    <span>Admin has not yet assigned a project ZIP to your team for Round {activeRound.roundNumber}. Please wait or contact support.</span>
+                    <span>Admin has not yet assigned a project ZIP to your team for {activeRound.name}. Please wait or contact support.</span>
                   </div>
                 )}
 
-                {/* Round GitHub link if Round 2 */}
+                {/* Show GitHub details only when this round has a repository. */}
                 {activeRound.type === 'REACT_GITHUB' && (activeRound.githubRepoUrl || (currentProject && currentProject.githubUrl)) && (
                   <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 mb-6">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-2 font-mono flex items-center gap-2">
@@ -319,7 +333,7 @@ export default function StudentDashboard() {
                   <span>SUBMIT YOUR COMPLETED WORK</span>
                 </h3>
                 <p className="text-xs text-slate-400 mb-6">
-                  Submit your repository link, commit SHA, or solution ZIP for Round {activeRound.roundNumber}.
+                  Submit your repository link, commit SHA, or solution ZIP for {activeRound.name}.
                 </p>
 
                 <form onSubmit={handleSubmissionSubmit} className="space-y-4">
@@ -482,7 +496,7 @@ export default function StudentDashboard() {
                     {mySubmissions.map((sub, idx) => (
                       <div key={sub._id || idx} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1">
                         <div className="flex items-center justify-between text-slate-400">
-                          <span className="font-mono font-semibold text-indigo-300">Round {sub.roundNumber}</span>
+                          <span className="font-mono font-semibold text-indigo-300">{rounds.find(round => round.roundNumber === sub.roundNumber)?.name || `Round ${sub.roundNumber}`}</span>
                           <span>{new Date(sub.submittedAt).toLocaleTimeString()}</span>
                         </div>
                         {sub.githubUrl && <div className="text-slate-300 font-mono truncate">Repo: {sub.githubUrl}</div>}

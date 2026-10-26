@@ -8,6 +8,7 @@ const ActivityLog = require('../models/ActivityLog');
 const { protect, adminOnly, studentOnly } = require('../middleware/authMiddleware');
 const { uploadSubmission } = require('../middleware/uploadMiddleware');
 const { isCloudinaryConfigured, uploadToCloudinary } = require('../config/cloudinary');
+const { roundsVisibleToBranch } = require('../utils/roundVisibility');
 
 // @route POST /api/student/submissions
 // Student submits project work for current active round
@@ -19,7 +20,10 @@ router.post('/', protect, studentOnly, uploadSubmission.single('submissionZip'),
     if (!rNum) return res.status(400).json({ message: 'Round number is required' });
 
     // Verify round is active
-    const round = await Round.findOne({ roundNumber: rNum });
+    const round = await Round.findOne({
+      roundNumber: rNum,
+      ...roundsVisibleToBranch(req.user.branchId)
+    });
     if (!round) return res.status(404).json({ message: 'Round not found' });
     
     // Check timing or status
@@ -56,6 +60,7 @@ router.post('/', protect, studentOnly, uploadSubmission.single('submissionZip'),
       teamId: team._id,
       teamCode: team.teamCode,
       participantId: req.user.arohanId,
+      branchId: req.user.branchId || null,
       githubUrl: githubUrl || '',
       commitSha: commitSha || '',
       zipPath,

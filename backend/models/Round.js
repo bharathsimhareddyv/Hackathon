@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
 
 const RoundSchema = new mongoose.Schema({
-  roundNumber: { type: Number, required: true, unique: true }, // 1, 2, 3
-  name: { type: String, required: true }, // e.g. DEBUGGING CHALLENGE
+  roundNumber: { type: Number, required: true, unique: true },
+  branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', default: null },
+  assignedBranchIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Branch' }],
+  name: { type: String, required: true, trim: true, maxlength: 150 },
   type: { type: String, enum: ['DEBUGGING', 'REACT_GITHUB', 'APPLICATION'], required: true },
   description: { type: String, default: '' },
   instructions: { type: String, default: '' },
@@ -15,7 +17,7 @@ const RoundSchema = new mongoose.Schema({
   },
   maxMarks: { type: Number, default: 100 },
   qualificationCriteria: {
-    minErrorsSolved: { type: Number, default: 120 },
+    minErrorsSolved: { type: Number, default: 0 },
     minPercentage: { type: Number, default: 60 },
     minMarks: { type: Number, default: 60 },
     ruleType: { type: String, enum: ['OR', 'AND'], default: 'OR' }

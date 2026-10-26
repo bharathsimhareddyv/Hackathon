@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { UserCheck, FolderGit2, CheckSquare, Square } from 'lucide-react';
 
 export default function AdminTeams() {
-  const [selectedRound, setSelectedRound] = useState(1);
+  const [selectedRound, setSelectedRound] = useState('');
   const [teams, setTeams] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -22,17 +22,29 @@ export default function AdminTeams() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [teamsRes, partsRes, projRes, roundsRes] = await Promise.all([
+      const roundsRes = await api.get('/rounds');
+      setRounds(roundsRes.data);
+      const selectedRoundExists = roundsRes.data.some(round => String(round.roundNumber) === String(selectedRound));
+      if (!selectedRoundExists && roundsRes.data.length > 0) {
+        setSelectedRound(String(roundsRes.data[0].roundNumber));
+        return;
+      }
+      if (!roundsRes.data.length) {
+        setTeams([]);
+        setParticipants([]);
+        setProjects([]);
+        return;
+      }
+
+      const [teamsRes, partsRes, projRes] = await Promise.all([
         api.get(`/admin/team-accounts/round/${selectedRound}`),
         api.get('/admin/participants'),
-        api.get('/projects', { params: { roundNumber: selectedRound } }),
-        api.get('/rounds')
+        api.get('/projects', { params: { roundNumber: selectedRound } })
       ]);
 
       setTeams(teamsRes.data);
       setParticipants(partsRes.data);
       setProjects(projRes.data);
-      setRounds(roundsRes.data);
       if (!teamsRes.data.some(team => String(team.teamAccountId?._id) === String(selectedTeamId))) {
         setSelectedTeamId(teamsRes.data[0]?.teamAccountId?._id || '');
       }
@@ -60,6 +72,7 @@ export default function AdminTeams() {
   };
 
   const selectedTeam = teams.find(team => String(team.teamAccountId?._id) === String(selectedTeamId));
+  const selectedRoundName = rounds.find(round => String(round.roundNumber) === String(selectedRound))?.name || 'No round selected';
 
   useEffect(() => {
     setSelectedPids(selectedTeam?.participantIds || []);
@@ -114,10 +127,10 @@ export default function AdminTeams() {
               key={round._id}
               onClick={() => setSelectedRound(round.roundNumber)}
               className={`px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all ${
-                selectedRound === round.roundNumber ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-slate-200'
+                String(selectedRound) === String(round.roundNumber) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              ROUND {round.roundNumber}
+              {round.name}
             </button>
           ))}
         </div>
@@ -129,7 +142,7 @@ export default function AdminTeams() {
           <div className="flex items-center gap-2">
             <UserCheck className="w-5 h-5 text-cyan-400" />
             <h2 className="text-base font-bold text-white font-outfit uppercase">
-              ASSIGN STUDENTS · ROUND {selectedRound}
+              ASSIGN STUDENTS · {selectedRoundName}
             </h2>
           </div>
 
@@ -218,16 +231,16 @@ export default function AdminTeams() {
       <div className="glass-panel p-6 rounded-3xl space-y-6">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <h2 className="text-base font-bold text-white font-outfit uppercase">
-            ROUND {selectedRound} ACTIVE TEAMS LIST
+            {selectedRoundName} ACTIVE TEAMS LIST
           </h2>
           <span className="text-xs text-slate-400 font-mono">Count: {teams.length} Teams</span>
         </div>
 
         {loading ? (
-          <div className="text-center py-12 text-slate-400">Loading Round {selectedRound} teams...</div>
+          <div className="text-center py-12 text-slate-400">Loading {selectedRoundName} teams...</div>
         ) : teams.length === 0 ? (
           <div className="text-center py-12 text-slate-500 text-sm">
-            No team accounts are assigned to Round {selectedRound}. Create the accounts first in Team Accounts.
+            No team accounts are assigned to {selectedRoundName}. Create the accounts first in Team Accounts.
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">

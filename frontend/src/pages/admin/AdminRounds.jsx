@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import StatusBadge from '../../components/StatusBadge';
 import { useAuth } from '../../context/AuthContext';
-import { Clock, Play, Pause, Square, RotateCcw, Edit, Save, GitBranch } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Edit, Save, Trash2 } from 'lucide-react';
 
 const toLocalDateTimeInput = value => {
   const date = new Date(value);
@@ -11,10 +11,58 @@ const toLocalDateTimeInput = value => {
 
 const localDateTimeToIso = value => new Date(value).toISOString();
 
+function BranchAssignmentSelector({ branches, allBranches, setAllBranches, selectedBranchIds, setSelectedBranchIds }) {
+  const toggleBranch = (branchId, checked) => {
+    setSelectedBranchIds(current => checked
+      ? [...new Set([...current, branchId])]
+      : current.filter(id => id !== branchId));
+  };
+  const allBranchIds = branches.map(branch => String(branch._id));
+
+  return (
+    <fieldset className="space-y-2 rounded-xl border border-slate-700 p-3 sm:col-span-2 lg:col-span-7">
+      <legend className="px-1 text-xs font-semibold text-slate-300">Branches that can access this round</legend>
+      <label className="flex items-center gap-2 text-xs text-cyan-200">
+        <input
+          type="checkbox"
+          checked={allBranches}
+          onChange={event => {
+            setAllBranches(event.target.checked);
+            setSelectedBranchIds(event.target.checked ? allBranchIds : []);
+          }}
+        />
+        All current branches — same round timing for everyone
+      </label>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {branches.map(branch => {
+          const branchId = String(branch._id);
+          return (
+            <label key={branchId} className="flex items-center gap-2 text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={selectedBranchIds.includes(branchId)}
+                onChange={event => {
+                  setAllBranches(false);
+                  toggleBranch(branchId, event.target.checked);
+                }}
+              />
+              {branch.name}
+            </label>
+          );
+        })}
+        {!branches.length && <span className="text-xs text-slate-500">No branches are available.</span>}
+      </div>
+    </fieldset>
+  );
+}
+
 export default function AdminRounds() {
   const [rounds, setRounds] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingRound, setEditingRound] = useState(null);
+  const [editAllBranches, setEditAllBranches] = useState(false);
+  const [editBranchIds, setEditBranchIds] = useState([]);
   
   // Edit Form State
   const [name, setName] = useState('');
@@ -23,7 +71,7 @@ export default function AdminRounds() {
   const [startAt, setStartAt] = useState('');
   const [endAt, setEndAt] = useState('');
   const [maxMarks, setMaxMarks] = useState(100);
-  const [minErrorsSolved, setMinErrorsSolved] = useState(120);
+  const [minErrorsSolved, setMinErrorsSolved] = useState(0);
   const [minMarks, setMinMarks] = useState(60);
   const [githubRepoUrl, setGithubRepoUrl] = useState('');
   const [minPercentage, setMinPercentage] = useState(60);
@@ -37,15 +85,22 @@ export default function AdminRounds() {
   const [newRoundMinPercentage, setNewRoundMinPercentage] = useState(60);
   const [newRoundCriteria, setNewRoundCriteria] = useState('');
   const [newRoundInstructions, setNewRoundInstructions] = useState('');
+  const [newRoundAllBranches, setNewRoundAllBranches] = useState(false);
+  const [newRoundBranchIds, setNewRoundBranchIds] = useState([]);
   const [creating, setCreating] = useState(false);
+  const [deletingRound, setDeletingRound] = useState('');
 
   const { showToast } = useAuth();
 
   const fetchRounds = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/rounds');
-      setRounds(res.data);
+      const [roundsResponse, branchesResponse] = await Promise.all([
+        api.get('/rounds'),
+        api.get('/admin/branches')
+      ]);
+      setRounds(roundsResponse.data);
+      setBranches(branchesResponse.data);
     } catch (err) {
       console.error('Fetch Rounds Error:', err);
     } finally {
@@ -65,11 +120,16 @@ export default function AdminRounds() {
     setStartAt(toLocalDateTimeInput(r.startAt));
     setEndAt(toLocalDateTimeInput(r.endAt));
     setMaxMarks(r.maxMarks || 100);
-    setMinErrorsSolved(r.qualificationCriteria?.minErrorsSolved || 120);
+    setMinErrorsSolved(r.qualificationCriteria?.minErrorsSolved ?? 0);
     setMinMarks(r.qualificationCriteria?.minMarks || 60);
     setGithubRepoUrl(r.githubRepoUrl || '');
     setMinPercentage(r.qualificationCriteria?.minPercentage ?? r.requiredMinPercentage ?? 60);
     setCriteriaSummary(r.criteriaSummary || '');
+    const assignedBranchIds = r.branchId
+      ? [String(r.branchId)]
+      : (r.assignedBranchIds || []).map(branch => String(branch._id || branch));
+    setEditAllBranches(assignedBranchIds.length > 0 && assignedBranchIds.length === branches.length);
+    setEditBranchIds(assignedBranchIds);
   };
 
   const handleSaveRound = async (id) => {
@@ -81,6 +141,10 @@ export default function AdminRounds() {
     }
     if (!Number.isFinite(Number(maxMarks)) || Number(maxMarks) <= 0) {
       showToast('Maximum marks must be greater than zero', 'error');
+      return;
+    }
+    if (editBranchIds.length === 0) {
+      showToast('Select at least one branch or choose all branches', 'error');
       return;
     }
     try {
@@ -99,7 +163,8 @@ export default function AdminRounds() {
         },
         githubRepoUrl,
         criteriaSummary,
-        requiredMinPercentage: parseInt(minPercentage, 10)
+        requiredMinPercentage: parseInt(minPercentage, 10),
+        assignedBranchIds: editBranchIds
       });
 
       showToast('Round schedule & settings saved!', 'success');
@@ -122,6 +187,24 @@ export default function AdminRounds() {
     }
   };
 
+  const handleDeleteRound = async round => {
+    const confirmed = window.confirm(
+      `Delete "${round.name}"? This also deletes its team assignments, projects, submissions, evaluations, and progress claims.`
+    );
+    if (!confirmed) return;
+    setDeletingRound(round._id);
+    try {
+      await api.delete(`/rounds/${round._id}`);
+      showToast(`Deleted ${round.name}`, 'success');
+      if (editingRound === round._id) setEditingRound(null);
+      await fetchRounds();
+    } catch (error) {
+      showToast(error.response?.data?.message || 'Failed to delete round', 'error');
+    } finally {
+      setDeletingRound('');
+    }
+  };
+
   const handleCreateRound = async (event) => {
     event.preventDefault();
     const startAt = newRoundStart ? new Date(newRoundStart) : new Date();
@@ -132,6 +215,10 @@ export default function AdminRounds() {
     }
     if (!Number.isFinite(Number(newRoundMaxMarks)) || Number(newRoundMaxMarks) <= 0) {
       showToast('Maximum marks must be greater than zero', 'error');
+      return;
+    }
+    if (newRoundBranchIds.length === 0) {
+      showToast('Select at least one branch or choose all branches', 'error');
       return;
     }
     const roundNumber = rounds.reduce((max, round) => Math.max(max, round.roundNumber), 0) + 1;
@@ -147,13 +234,16 @@ export default function AdminRounds() {
         startAt: startAt.toISOString(),
         endAt: endAt.toISOString(),
         maxMarks: Number(newRoundMaxMarks),
+        assignedBranchIds: newRoundBranchIds,
         qualificationCriteria: { minErrorsSolved: 0, minPercentage: Number(newRoundMinPercentage), minMarks: 60, ruleType: 'OR' }
       });
-      showToast(`Round ${roundNumber} created`, 'success');
+      showToast(`Created ${newRoundName.trim()}`, 'success');
       setNewRoundName('');
       setNewRoundCriteria('');
       setNewRoundInstructions('');
       setNewRoundMaxMarks(100);
+      setNewRoundAllBranches(true);
+      setNewRoundBranchIds([]);
       fetchRounds();
     } catch (err) {
       showToast(err.response?.data?.message || 'Failed to create round', 'error');
@@ -172,7 +262,7 @@ export default function AdminRounds() {
       </div>
 
       <form onSubmit={handleCreateRound} className="glass-panel grid gap-4 rounded-2xl border border-emerald-500/20 p-5 sm:grid-cols-2 lg:grid-cols-7 lg:items-end">
-        <div className="sm:col-span-2 lg:col-span-7"><h2 className="text-base font-bold text-white">Create another round</h2><p className="mt-1 text-xs text-slate-400">Rounds are numbered automatically and can be added whenever your event needs them.</p></div>
+        <div className="sm:col-span-2 lg:col-span-7"><h2 className="text-base font-bold text-white">Create a round</h2><p className="mt-1 text-xs text-slate-400">Name and configure rounds to fit your event. Round identifiers are assigned automatically.</p></div>
         <label className="text-xs text-slate-300 sm:col-span-2">Round name<input value={newRoundName} onChange={event => setNewRoundName(event.target.value)} required placeholder="e.g. Final showcase" className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
         <label className="text-xs text-slate-300">Challenge type<select value={newRoundType} onChange={event => setNewRoundType(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm"><option value="DEBUGGING">Debugging</option><option value="REACT_GITHUB">React / GitHub</option><option value="APPLICATION">Application</option></select></label>
         <label className="text-xs text-slate-300">Starts<input type="datetime-local" value={newRoundStart} onChange={event => setNewRoundStart(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-xs" /></label>
@@ -184,6 +274,13 @@ export default function AdminRounds() {
         </div>
         <label className="text-xs text-slate-300 sm:col-span-2">Qualification criteria<textarea rows={2} value={newRoundCriteria} onChange={event => setNewRoundCriteria(event.target.value)} placeholder="Describe what teams need to qualify" className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
         <label className="text-xs text-slate-300 sm:col-span-2">Team instructions<textarea rows={2} value={newRoundInstructions} onChange={event => setNewRoundInstructions(event.target.value)} className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
+        <BranchAssignmentSelector
+          branches={branches}
+          allBranches={newRoundAllBranches}
+          setAllBranches={setNewRoundAllBranches}
+          selectedBranchIds={newRoundBranchIds}
+          setSelectedBranchIds={setNewRoundBranchIds}
+        />
       </form>
 
       <label className="block max-w-lg text-xs text-slate-400">Search rounds and criteria<input value={roundSearch} onChange={event => setRoundSearch(event.target.value)} placeholder="Name, description, or qualification criteria" className="glass-input mt-1.5 w-full rounded-lg px-3 py-2.5 text-sm" /></label>
@@ -201,9 +298,18 @@ export default function AdminRounds() {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-mono font-bold px-3 py-1 rounded-lg bg-indigo-950 text-indigo-300 border border-indigo-800">
-                      ROUND {r.roundNumber}
+                      {r.name}
                     </span>
-                    <h2 className="text-xl font-bold text-white font-outfit">{r.name}</h2>
+                    <div>
+                      <h2 className="text-xl font-bold text-white font-outfit">{r.name}</h2>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {r.branchId
+                          ? `Branch: ${branches.find(branch => String(branch._id) === String(r.branchId))?.name || 'Branch'}`
+                          : (r.assignedBranchIds?.length
+                            ? `Assigned to: ${r.assignedBranchIds.map(id => branches.find(branch => String(branch._id) === String(id._id || id))?.name || 'Branch').join(', ')}`
+                            : 'Not assigned to any branch')}
+                      </p>
+                    </div>
                     <StatusBadge status={r.status} />
                   </div>
 
@@ -263,6 +369,14 @@ export default function AdminRounds() {
                         Cancel
                       </button>
                     )}
+                    <button
+                      onClick={() => handleDeleteRound(r)}
+                      disabled={deletingRound === r._id}
+                      className="px-3 py-1.5 rounded-lg bg-rose-950 border border-rose-800 text-rose-300 text-xs font-bold hover:bg-rose-900 disabled:opacity-50 flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{deletingRound === r._id ? 'Deleting…' : 'Delete'}</span>
+                    </button>
                   </div>
                 </div>
 
@@ -321,7 +435,7 @@ export default function AdminRounds() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-1">Min Errors Solved (Round 1)</label>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Minimum Errors Solved</label>
                         <input
                           type="number"
                           value={minErrorsSolved}
@@ -359,6 +473,14 @@ export default function AdminRounds() {
                       <label className="block text-xs font-semibold text-slate-300 mb-1">Qualification Criteria</label>
                       <textarea rows={2} value={criteriaSummary} onChange={(e) => setCriteriaSummary(e.target.value)} className="w-full px-3.5 py-2 rounded-xl glass-input text-xs" />
                     </div>
+
+                    <BranchAssignmentSelector
+                      branches={branches}
+                      allBranches={editAllBranches}
+                      setAllBranches={setEditAllBranches}
+                      selectedBranchIds={editBranchIds}
+                      setSelectedBranchIds={setEditBranchIds}
+                    />
 
                     <button
                       onClick={() => handleSaveRound(r._id)}
